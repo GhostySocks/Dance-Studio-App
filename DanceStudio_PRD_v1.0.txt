@@ -1,0 +1,979 @@
+================================================================================
+PRODUCT REQUIREMENTS DOCUMENT
+Dance Studio Management Platform
+CRM | Tuition Management | Scheduling | Parent Portal | Financial Planning
+
+Version 1.0 — MVP
+March 2026
+Confidential
+================================================================================
+
+
+TABLE OF CONTENTS
+-----------------
+1.  Executive Summary
+2.  Recommended Tech Stack
+3.  Data Model & Database Schema
+4.  Feature Requirements
+5.  User Stories by Role
+6.  Implementation Plan
+7.  Recommended Project Structure
+8.  Environment Variables
+9.  Key Business Logic Specifications
+10. Non-Functional Requirements
+11. Notes for AI-Assisted Development (Cursor / Claude Code)
+12. Appendix: Glossary
+
+
+================================================================================
+1. EXECUTIVE SUMMARY
+================================================================================
+
+This document defines the product requirements for a Dance Studio Management
+Platform — a comprehensive, web-based SaaS application designed to serve dance
+studios, academies, and independent dance companies. The platform consolidates
+student lifecycle management, class scheduling, tuition billing, parent portals,
+teacher tooling, financial planning, and public-facing web features into a single
+cohesive system.
+
+The MVP (Phase 1) will deliver a fully functional, multi-role application
+covering all core workflows identified below, along with a public-facing website
+and embeddable schedule widget. The platform is designed to be AI-buildable
+inside a modern IDE (e.g., Cursor) using Claude Code from this document alone.
+
+
+1.1 Product Vision
+------------------
+To become the single operating system for dance studios — eliminating the need
+for spreadsheets, disparate billing tools, and paper-based attendance by
+providing an elegant, integrated platform for owners, teachers, parents, and
+students.
+
+
+1.2 Target Users
+----------------
+Role                  Description                          Access Level
+----                  -----------                          ------------
+Admin / Owner         Studio owner or business manager     Full access to all features
+Teacher / Instructor  Dance instructors managing classes   Limited: own classes, attendance, student view
+Parent / Guardian     Parents of enrolled students         Registration, payments, schedule, child history
+Student (Adult)       Adult students managing own account  Registration, payments, own schedule & history
+Public / Visitor      Website visitors, prospective users  Public schedule, registration, pricing
+
+
+================================================================================
+2. RECOMMENDED TECH STACK
+================================================================================
+
+2.1 Frontend
+------------
+Layer                  Technology                            Rationale
+-----                  ----------                            ---------
+Framework              Next.js 14 (App Router)               SSR/SSG for public pages, React for app UI
+Language               TypeScript                            Type safety, better IDE autocompletion
+Styling                Tailwind CSS + shadcn/ui              Utility-first CSS, accessible components
+Animation              Motion (motion.dev)                   Production-grade React animations. Page
+                                                             transitions, list animations, modal enters,
+                                                             dashboard stat reveals. Must be used in
+                                                             "use client" components only.
+State Management       Zustand + TanStack Query              Lightweight global state + server-state caching
+Forms                  React Hook Form + Zod                 Type-safe forms with schema validation
+Charts / Analytics     Recharts                              Enrollment stats, revenue charts, utilization
+Calendar / Scheduling  FullCalendar (React)                  Class scheduling with drag/drop support
+Payments UI            Stripe Elements                       PCI-compliant hosted payment UI
+Embeddable Widget      Vanilla JS via Next.js custom output  iframe-embeddable schedule + signup widget
+
+
+2.1.1 Motion Animation Guidelines
+----------------------------------
+Motion (motion.dev) is the designated animation library for all UI transitions
+and micro-interactions. Use it consistently across the app.
+
+- Install: npm install motion
+- Import: import { motion, AnimatePresence } from 'motion/react'
+- All motion components must live in files marked "use client"
+- Use AnimatePresence for any element that conditionally mounts/unmounts
+  (modals, drawers, toasts, empty states)
+- Page transitions: wrap layout children in AnimatePresence with fade/slide variant
+- Dashboard stat cards: staggered fade-up on mount using staggerChildren
+- Do NOT animate inside Server Components — create a thin client wrapper
+- Always use useReducedMotion() hook and skip/minimize animations when true
+
+Recommended presets to define in lib/motion.ts:
+  fadeUp         — opacity 0->1, y 16->0, ease: easeOut, duration: 0.3
+  fadeIn         — opacity 0->1, duration: 0.2
+  scaleIn        — opacity 0->1, scale 0.95->1, duration: 0.2 (modals/popovers)
+  staggerContainer — staggerChildren: 0.07, delayChildren: 0.1
+  slideInRight   — x 24->0, opacity 0->1 (drawers and side panels)
+
+
+2.2 Backend
+-----------
+Layer               Technology                         Rationale
+-----               ----------                         ---------
+API Framework       Next.js API Routes / Route Handlers  Collocated with frontend, serverless-compatible
+ORM                 Prisma                             Type-safe DB client, schema migrations
+Database            PostgreSQL (Supabase or Neon)      Relational model ideal for CRM & billing
+Auth                NextAuth.js (Auth.js v5)            Multi-role auth, OAuth + email/password
+File Storage        Supabase Storage or AWS S3          Profile photos, documents, receipts
+Email               Resend + React Email               Transactional emails: invoices, receipts
+SMS (Optional)      Twilio                             Class reminders, payment due alerts
+Background Jobs     Inngest or Vercel Cron             Recurring billing, reminder emails, reports
+PDF Generation      @react-pdf/renderer                Invoice and receipt PDF generation
+
+
+2.3 Payments
+------------
+Concern               Solution
+-------               --------
+Payment Processing    Stripe (Checkout, Payment Intents, Customer Portal)
+Recurring Tuition     Stripe Subscriptions or scheduled Payment Intents
+Invoicing             Stripe Invoices API + custom PDF overlay
+Family Discounts      Stripe Coupon / Discount objects applied at checkout
+Refunds               Stripe Refund API
+Scholarships          Internal credit ledger applied pre-Stripe charge
+
+
+2.4 Infrastructure & DevOps
+----------------------------
+Concern               Solution
+-------               --------
+Hosting               Vercel (frontend + API routes)
+Database Hosting      Supabase (Postgres + Auth + Storage) or Neon
+CI/CD                 GitHub Actions — lint, type check, test, deploy on merge
+Environment Config    dotenv + Vercel Environment Variables
+Error Monitoring      Sentry
+Analytics             PostHog (self-hostable, privacy-first)
+Version Control       Git + GitHub
+
+
+================================================================================
+3. DATA MODEL & DATABASE SCHEMA
+================================================================================
+
+3.1 Core Entities Overview
+--------------------------
+Entity           Description
+------           -----------
+User             All platform users. Auth identity. Carries role enum.
+StudioProfile    Studio/organization configuration and branding
+Student          A person enrolled in classes. Linked to User (adult) or Guardian.
+Guardian         Parent/guardian with one or more Student dependents
+FamilyGroup      Groups related Students and Guardians for discount and billing
+Teacher          Instructor profile linked to a User account
+Room             Physical studio rooms/spaces with name, capacity, description
+ClassTemplate    Reusable class definition: name, style, level, pricing
+ClassSession     A scheduled instance of a ClassTemplate with room, teacher, time
+Enrollment       M:M junction between Student and ClassSession
+Attendance       Per-session attendance record per enrolled Student
+Invoice          Billing record for tuition or custom charges
+InvoiceLineItem  Individual line items on an invoice
+Payment          Records of payments made against invoices (via Stripe)
+Scholarship      Scholarship or credit awarded to a Student or FamilyGroup
+PricingRule      Custom pricing logic including family discounts
+AuditLog         Immutable log of all significant system actions
+
+
+3.2 Key Relationships
+---------------------
+- User 1:1 Student (adult self-enrolling)
+- User 1:1 Guardian (parent portal user)
+- Guardian 1:N Student (parent has multiple children)
+- FamilyGroup 1:N Student (billing family unit)
+- FamilyGroup 1:N Guardian
+- Student N:M ClassSession via Enrollment
+- ClassSession N:1 Room
+- ClassSession N:1 Teacher
+- ClassSession N:1 ClassTemplate
+- ClassSession 1:N Attendance
+- Invoice N:1 Student or FamilyGroup
+- Invoice 1:N InvoiceLineItem
+- Payment N:1 Invoice
+- Scholarship N:1 Student or FamilyGroup
+
+
+3.3 Sample Prisma Schema (Abbreviated)
+---------------------------------------
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  role         UserRole  @default(PARENT)
+  student      Student?
+  guardian     Guardian?
+  teacher      Teacher?
+  createdAt    DateTime  @default(now())
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  TEACHER
+  PARENT
+  STUDENT
+}
+
+model FamilyGroup {
+  id        String     @id @default(cuid())
+  name      String
+  students  Student[]
+  guardians Guardian[]
+  invoices  Invoice[]
+}
+
+model Student {
+  id            String       @id @default(cuid())
+  firstName     String
+  lastName      String
+  dateOfBirth   DateTime?
+  familyGroup   FamilyGroup? @relation(fields: [familyGroupId], references: [id])
+  familyGroupId String?
+  guardian      Guardian?    @relation(fields: [guardianId], references: [id])
+  guardianId    String?
+  enrollments   Enrollment[]
+  scholarships  Scholarship[]
+  invoices      Invoice[]
+}
+
+model Room {
+  id           String         @id @default(cuid())
+  name         String
+  description  String?
+  capacity     Int
+  sessions     ClassSession[]
+}
+
+model ClassTemplate {
+  id                  String         @id @default(cuid())
+  name                String
+  description         String?
+  danceStyle          String?
+  skillLevel          String?
+  defaultDurationMins Int
+  basePriceCents      Int
+  sessions            ClassSession[]
+}
+
+model ClassSession {
+  id          String        @id @default(cuid())
+  template    ClassTemplate @relation(fields: [templateId], references: [id])
+  templateId  String
+  teacher     Teacher       @relation(fields: [teacherId], references: [id])
+  teacherId   String
+  room        Room          @relation(fields: [roomId], references: [id])
+  roomId      String
+  startTime   DateTime
+  endTime     DateTime
+  maxCapacity Int
+  isRecurring Boolean       @default(false)
+  enrollments Enrollment[]
+  attendance  Attendance[]
+}
+
+model Enrollment {
+  id        String           @id @default(cuid())
+  student   Student          @relation(fields: [studentId], references: [id])
+  studentId String
+  session   ClassSession     @relation(fields: [sessionId], references: [id])
+  sessionId String
+  status    EnrollmentStatus @default(ACTIVE)
+  createdAt DateTime         @default(now())
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  WAITLIST
+  CANCELLED
+}
+
+model Invoice {
+  id            String            @id @default(cuid())
+  student       Student?          @relation(fields: [studentId], references: [id])
+  studentId     String?
+  familyGroup   FamilyGroup?      @relation(fields: [familyGroupId], references: [id])
+  familyGroupId String?
+  periodStart   DateTime
+  periodEnd     DateTime
+  status        InvoiceStatus     @default(DRAFT)
+  totalCents    Int
+  lineItems     InvoiceLineItem[]
+  payments      Payment[]
+  createdAt     DateTime          @default(now())
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  VOID
+}
+
+model Scholarship {
+  id            String          @id @default(cuid())
+  name          String
+  student       Student?        @relation(fields: [studentId], references: [id])
+  studentId     String?
+  familyGroup   FamilyGroup?    @relation(fields: [familyGroupId], references: [id])
+  familyGroupId String?
+  type          ScholarshipType
+  value         Int
+  startDate     DateTime
+  endDate       DateTime?
+  notes         String?
+}
+
+enum ScholarshipType {
+  PERCENT
+  FIXED
+  WAIVER
+}
+
+
+================================================================================
+4. FEATURE REQUIREMENTS
+================================================================================
+
+4.1 Authentication & Role System
+---------------------------------
+- Email/password login with secure password hashing (bcrypt)
+- OAuth login via Google (recommended for parents)
+- Role-based access control (RBAC): SUPER_ADMIN, ADMIN, TEACHER, PARENT, STUDENT
+- Invitation-based teacher onboarding (admin sends invite link)
+- Parent self-registration tied to student enrollment flow
+- Session management with secure httpOnly cookies
+- Password reset via email link
+- Two-factor authentication (Phase 2)
+
+
+4.2 Student & Family CRM
+-------------------------
+- Create, read, update, archive student profiles
+- Fields: name, DOB, photo, contact info, emergency contact, medical notes,
+  skill level, dance styles
+- Assign student to a FamilyGroup
+- Map guardian <-> student relationships (multiple guardians per student)
+- Full engagement history per student: enrollment history, attendance record,
+  payment history, scholarship history, notes timeline
+- Teacher-facing student view: attendance, enrolled classes, basic notes
+  (no financial data visible to teachers)
+- Admin-facing student view: full history including billing, outstanding
+  balances, scholarship details
+- Search and filter by name, class, enrollment status, family group, balance
+- Bulk actions: enroll group, send email to cohort, generate invoices for group
+- Student tags and custom fields for studio-specific metadata
+
+
+4.3 Teacher Management
+-----------------------
+- Teacher profiles: bio, specialties, certifications, photo, contact info
+- Assign teachers to class sessions
+- Teacher dashboard: upcoming classes, student roster per class, attendance marking
+- Teacher cannot view or modify billing, invoices, or admin financials
+- Admin view: teacher utilization (hours taught, classes per week, student counts)
+- Teacher engagement history: all sessions taught, attendance records submitted
+
+
+4.4 Room Management
+--------------------
+- CRUD operations for studio rooms/spaces
+- Fields: name, description, capacity, floor type (optional), amenities notes
+- Rooms displayed in scheduling UI as selectable resources
+- Conflict detection: prevent double-booking a room at the same time
+- Admin view showing room utilization stats (hours used, % capacity filled)
+
+
+4.5 Class Scheduling & Management
+-----------------------------------
+- Class Templates: reusable class types with name, description, dance style,
+  skill level, default duration, default price
+- Class Sessions: schedule instances from templates with specific date/time,
+  teacher, room, max capacity
+- Recurring sessions: weekly/biweekly recurring schedule with end date
+- Calendar view (week/month) for admin showing all sessions across rooms
+- Teacher calendar view showing only their own sessions
+- Enrollment cap enforcement: prevent over-enrollment, show waitlist option
+- Waitlist management: auto-notify next on waitlist when spot opens
+- Session cancellation with auto-notification to enrolled students/parents
+- Session notes field for teachers (lesson notes, recital prep notes)
+
+
+4.6 Enrollment Management
+--------------------------
+- Admin can manually enroll or remove a student from any class session
+- Parent can enroll their student(s) via parent portal
+- Adult student can self-enroll via student portal
+- Public registration flow: visitor browses schedule, initiates enrollment
+  (requires account creation or login)
+- Enrollment triggers invoice generation (or adds to next billing cycle)
+- Unenrollment policy: configurable (e.g., must unenroll X days before class
+  for refund)
+- Enrollment confirmation email sent automatically
+
+
+4.7 Attendance Tracking
+------------------------
+- Teacher opens attendance view for a specific class session
+- Student list pre-populated from enrollments
+- Mark each student: Present, Absent, Late, Excused Absent
+- Teacher submits attendance — locked after submission
+  (admin can unlock/override)
+- Admin can view attendance reports by student, class, teacher, or date range
+- Attendance percentage displayed on student profile
+- Low attendance alert: flag students below configurable threshold (e.g., 70%)
+
+
+4.8 Tuition & Custom Billing
+-----------------------------
+- Per-class custom pricing: each ClassTemplate has its own base price
+- Pricing override per session if needed
+- Family pricing rules: configurable discount logic for family groups
+    Example rule types:
+    - "2nd student in family pays 50%"
+    - "family cap of $X/month"
+    - "flat rate for N or more family members"
+- Pricing rules stored as PricingRule records linked to FamilyGroup or globally
+- Custom one-off charges: add arbitrary line items to a student or family invoice
+- Billing cycles: monthly or per-session (configurable per studio)
+- Invoice generation: auto-generate monthly or trigger manually
+- Invoice statuses: Draft, Sent, Paid, Overdue, Void
+- Invoice PDF generation and email delivery
+- Admin can manually void or adjust invoices
+
+
+4.9 Online Payment Portal (Parents / Students)
+-----------------------------------------------
+- Parent/student logs in and sees outstanding invoices
+- Pay invoice via Stripe (credit/debit card, ACH optional)
+- Payment receipt emailed automatically
+- Saved payment methods (Stripe Customer + PaymentMethod)
+- Auto-pay enrollment: parent opts in to automatic monthly charge
+- Payment history visible to parent/student
+- Failed payment retry logic and notification
+- Stripe Customer Portal link for self-service card management
+
+
+4.10 Invoicing
+---------------
+- Invoices generated per student or per family group
+- Line items: tuition per class, discounts, scholarship credits, custom
+  charges, late fees
+- Discount line items show applied pricing rules (transparency)
+- PDF invoice with studio branding, logo, contact info
+- Email invoice delivery with pay-now link
+- Partial payments tracked against invoice balance
+- Aging report: invoices by days outstanding
+- Admin bulk invoice generation for all active students for a billing period
+
+
+4.11 Scholarship Tracking
+--------------------------
+- Admin can create and assign scholarships to a student or family group
+- Scholarship types: percentage discount, fixed dollar amount, full waiver
+- Scholarship fields: name, donor/sponsor name (optional), amount/%,
+  applicable classes (all or specific), start date, end date, notes
+- Scholarships automatically applied as line item credit on invoice generation
+- Scholarship history on student and family group profiles
+- Admin report: total scholarship value awarded by period
+
+
+4.12 Financial Planning & P&L Dashboard
+-----------------------------------------
+- Revenue projections: enrolled students x tuition rates for upcoming periods
+- Actual vs projected revenue comparison
+- Expense tracking: log expense categories (rent, utilities, teacher pay, etc.)
+- Net P&L summary by month and year
+- Cash flow forecast: expected receivables minus logged expenses
+- Scholarship impact report: total dollars in scholarship credits
+- Outstanding receivables: total unpaid invoice balances
+- Revenue by class, by teacher, by room, by time period (drill-down filters)
+- Enrollment revenue modeling: "what if" scenario for pricing changes
+- Export financial reports to CSV/Excel
+
+
+4.13 Admin Statistics & Utilization Dashboard
+----------------------------------------------
+- Total active students, new enrollments this month, unenrollments this month
+- Classes by enrollment fill rate (% of capacity used)
+- Room utilization: hours booked vs available hours per room
+- Teacher hours: sessions and total hours per teacher per period
+- Attendance rate by class, teacher, and studio overall
+- Churn indicators: students who haven't attended in X weeks
+- Revenue per student average, revenue per class average
+- Top performing classes (revenue, attendance, waitlist size)
+- Date range selectors (this week, this month, custom range)
+
+
+4.14 Public-Facing Website (MVP)
+---------------------------------
+- Homepage: studio branding, hero section, brief about
+- Schedule page: public-facing class schedule with filter by style/level/day
+- Class detail page: description, teacher bio, price, available spots, enroll CTA
+- Registration / signup flow: create account, add students, select classes, pay
+- About / Teachers page: teacher profiles and bios
+- Contact page with form or contact info
+- SEO basics: meta titles, Open Graph tags, sitemap
+- Responsive design (mobile-first)
+
+
+4.15 Embeddable Schedule & Signup Widget
+-----------------------------------------
+- A JavaScript snippet studio owners paste into any external website
+- Renders a styled class schedule table or calendar view
+- Clicking a class opens enrollment flow (hosted on platform domain)
+- Widget is responsive and customizable via data attributes (colors, filters)
+- Implemented as a standalone Next.js page rendered in an iframe
+- Example embed code:
+  <script src="https://app.domain.com/widget.js"
+          data-studio="studio-slug"></script>
+
+
+================================================================================
+5. USER STORIES BY ROLE
+================================================================================
+
+5.1 Admin / Owner Stories
+--------------------------
+1.  As an admin, I can create and manage rooms to organize scheduling by space.
+2.  As an admin, I can create class templates and schedule recurring sessions
+    with room and teacher assignments.
+3.  As an admin, I can enroll or unenroll students from any class and see
+    enrollment history.
+4.  As an admin, I can create family groups and link students and guardians.
+5.  As an admin, I can configure family pricing rules so discounts apply
+    automatically on invoices.
+6.  As an admin, I can generate monthly invoices for all families and send
+    them via email.
+7.  As an admin, I can issue scholarships and track their impact on revenue.
+8.  As an admin, I can view a P&L dashboard showing projected vs actual
+    revenue and expenses.
+9.  As an admin, I can see class utilization, teacher hours, and attendance
+    rates in the stats dashboard.
+10. As an admin, I can export financial and enrollment reports to CSV.
+
+
+5.2 Teacher Stories
+--------------------
+1. As a teacher, I can view my upcoming class schedule with room assignments.
+2. As a teacher, I can view the student roster for each of my classes.
+3. As a teacher, I can mark attendance for each class session and submit it.
+4. As a teacher, I can view individual student profiles including attendance
+   history in my classes.
+5. As a teacher, I cannot access billing, invoices, or admin financial data.
+
+
+5.3 Parent / Guardian Stories
+-------------------------------
+1. As a parent, I can create an account and add my children as students.
+2. As a parent, I can browse the class schedule and enroll my children.
+3. As a parent, I can view outstanding invoices and pay them online.
+4. As a parent, I can enroll in auto-pay so tuition is charged automatically.
+5. As a parent, I can view my children's attendance and enrollment history.
+6. As a parent, I can update my payment method and view past receipts.
+
+
+5.4 Public / Visitor Stories
+------------------------------
+1. As a visitor, I can browse the public class schedule without an account.
+2. As a visitor, I can click a class and see its details, price, availability.
+3. As a visitor, I can start an enrollment flow that prompts me to create
+   an account.
+4. As a visitor on an external website, I can see an embedded schedule widget
+   and click to register.
+
+
+================================================================================
+6. IMPLEMENTATION PLAN
+================================================================================
+
+Phase 1: Foundation (Weeks 1-2)
+--------------------------------
+- Initialize Next.js 14 project with TypeScript, Tailwind CSS, and shadcn/ui
+- Set up Prisma with PostgreSQL (Supabase or Neon)
+- Implement full schema from Section 3
+- Configure NextAuth.js with email/password and role-based middleware
+- Build role-aware layout shell: sidebar nav, top bar, role-gated route protection
+- Create lib/motion.ts with standard animation variants
+- Seed database with demo data (studio, rooms, teachers, students, classes)
+
+Phase 2: CRM Core (Weeks 3-4)
+-------------------------------
+- Build Student CRUD pages (admin + teacher views)
+- Build Guardian management and family group linking
+- Build Teacher profile management
+- Implement CRM history timeline (enrollment, attendance, payment events)
+- Build search and filter UI for students and families
+
+Phase 3: Scheduling & Rooms (Weeks 5-6)
+-----------------------------------------
+- Build Room CRUD admin interface
+- Build Class Template CRUD
+- Build Class Session scheduler with FullCalendar integration
+- Implement recurring session generation
+- Build room conflict detection logic
+- Build teacher and admin calendar views
+
+Phase 4: Enrollment (Week 7)
+------------------------------
+- Admin enrollment management: enroll/unenroll student from session
+- Enrollment cap and waitlist logic
+- Enrollment confirmation email (via Resend)
+- Parent portal enrollment flow
+
+Phase 5: Attendance (Week 8)
+------------------------------
+- Teacher attendance marking UI
+- Attendance submission and locking
+- Admin attendance reports and override capability
+- Attendance stats on student profile
+
+Phase 6: Billing & Invoicing (Weeks 9-10)
+-------------------------------------------
+- Implement PricingRule system with family discount logic
+- Invoice generation engine (per student/family, per billing period)
+- Invoice CRUD and status management
+- PDF invoice generation with @react-pdf/renderer
+- Scholarship creation and auto-application to invoices
+- Bulk invoice generation for billing period
+
+Phase 7: Payments (Weeks 11-12)
+---------------------------------
+- Stripe integration: Customer creation, PaymentIntent, Checkout
+- Parent payment portal: view invoices, pay online
+- Auto-pay with Stripe Subscriptions or scheduled intents
+- Payment success/failure webhooks and invoice status updates
+- Receipt email on successful payment
+- Stripe Customer Portal for card management
+
+Phase 8: Financial Dashboard & Stats (Week 13)
+------------------------------------------------
+- Admin P&L dashboard with revenue projections vs actuals
+- Expense tracking module
+- Class utilization and room utilization reports
+- Teacher hours and attendance rate dashboard
+- CSV/Excel export of all reports
+
+Phase 9: Public Website (Week 14)
+-----------------------------------
+- Public homepage with studio branding
+- Public class schedule page with filters
+- Class detail and enrollment CTA
+- Teacher bios page
+- Public registration and enrollment onboarding flow
+- SEO and mobile responsiveness
+
+Phase 10: Embeddable Widget & Polish (Week 15)
+------------------------------------------------
+- Build iframe-embeddable schedule widget
+- Widget customization via data attributes
+- End-to-end QA across all roles
+- Accessibility audit (WCAG 2.1 AA)
+- Security review: RBAC audit, API route protection
+- Production deployment to Vercel + Supabase
+
+
+================================================================================
+7. RECOMMENDED PROJECT STRUCTURE
+================================================================================
+
+/
+├── app/
+│   ├── (public)/               # No auth required
+│   │   ├── page.tsx            # Homepage
+│   │   ├── schedule/page.tsx   # Public schedule
+│   │   ├── classes/[id]/page.tsx
+│   │   ├── register/page.tsx   # Signup / enrollment onboarding
+│   │   └── layout.tsx          # Public nav + footer
+│   ├── (app)/                  # Auth required
+│   │   ├── admin/              # ADMIN role only
+│   │   │   ├── dashboard/
+│   │   │   ├── students/
+│   │   │   ├── families/
+│   │   │   ├── teachers/
+│   │   │   ├── classes/
+│   │   │   ├── rooms/
+│   │   │   ├── schedule/
+│   │   │   ├── billing/
+│   │   │   ├── scholarships/
+│   │   │   └── reports/
+│   │   ├── teacher/            # TEACHER role only
+│   │   │   ├── dashboard/
+│   │   │   ├── classes/
+│   │   │   └── attendance/
+│   │   ├── parent/             # PARENT role only
+│   │   │   ├── dashboard/
+│   │   │   ├── students/
+│   │   │   ├── schedule/
+│   │   │   └── billing/
+│   │   └── layout.tsx          # App shell with sidebar
+│   ├── api/
+│   │   ├── auth/
+│   │   ├── students/
+│   │   ├── classes/
+│   │   ├── enrollment/
+│   │   ├── attendance/
+│   │   ├── invoices/
+│   │   ├── payments/
+│   │   └── webhooks/stripe/
+│   └── widget/                 # Embeddable widget page
+├── components/
+│   ├── ui/                     # shadcn/ui primitives (do not edit)
+│   ├── forms/                  # Reusable form components
+│   ├── tables/                 # Data table components
+│   ├── charts/                 # Recharts wrappers
+│   ├── calendar/               # FullCalendar wrappers
+│   └── pdf/                    # React PDF invoice templates
+├── lib/
+│   ├── prisma.ts               # Prisma client singleton
+│   ├── auth.ts                 # NextAuth config + helpers
+│   ├── stripe.ts               # Stripe client singleton
+│   ├── email.ts                # Resend email helpers
+│   ├── billing.ts              # Invoice generation + pricing logic
+│   ├── motion.ts               # Motion animation variants
+│   ├── permissions.ts          # RBAC helper functions
+│   └── db/                     # Repository functions (DB access layer)
+│       ├── students.ts
+│       ├── classes.ts
+│       ├── enrollment.ts
+│       ├── attendance.ts
+│       ├── invoices.ts
+│       └── families.ts
+├── types/                      # Global TypeScript types and enums
+├── hooks/                      # Custom React hooks
+├── prisma/
+│   ├── schema.prisma
+│   └── seed.ts
+├── emails/                     # React Email templates
+├── .env.local
+├── next.config.ts
+└── tailwind.config.ts
+
+
+================================================================================
+8. ENVIRONMENT VARIABLES
+================================================================================
+
+# Database
+DATABASE_URL="postgresql://..."
+
+# Auth (NextAuth)
+NEXTAUTH_URL="https://yourdomain.com"
+NEXTAUTH_SECRET="<random-secret>"
+
+# Stripe
+STRIPE_PUBLISHABLE_KEY="pk_live_..."
+STRIPE_SECRET_KEY="sk_live_..."
+STRIPE_WEBHOOK_SECRET="whsec_..."
+
+# Email (Resend)
+RESEND_API_KEY="re_..."
+EMAIL_FROM="noreply@yourstudio.com"
+
+# Storage (Supabase)
+NEXT_PUBLIC_SUPABASE_URL="https://..."
+NEXT_PUBLIC_SUPABASE_ANON_KEY="..."
+SUPABASE_SERVICE_ROLE_KEY="..."
+
+# App Config
+NEXT_PUBLIC_APP_URL="https://yourdomain.com"
+NEXT_PUBLIC_STUDIO_SLUG="my-dance-studio"
+
+
+================================================================================
+9. KEY BUSINESS LOGIC SPECIFICATIONS
+================================================================================
+
+9.1 Family Pricing Rule Engine (lib/billing.ts)
+-------------------------------------------------
+When generating an invoice for a FamilyGroup:
+
+1. Collect all ACTIVE enrollments for all students in the family for the
+   billing period.
+2. Sort enrollments by basePriceCents descending (most expensive first).
+3. Apply full base price to enrollment[0].
+4. For enrollment[1+], evaluate PricingRules for this family group
+   (or fall back to global rules).
+5. Rule types:
+   - PERCENT_OFF    e.g., 50% off 2nd student
+   - FIXED_PRICE    e.g., 2nd student always pays $50
+   - FAMILY_CAP     e.g., total family bill never exceeds $200/month
+6. Apply scholarship credits as negative InvoiceLineItem records after
+   discounts are applied.
+7. All amounts stored and calculated in cents. Round with Math.round().
+
+
+9.2 Enrollment & Capacity Check (lib/db/enrollment.ts)
+--------------------------------------------------------
+const count = await prisma.enrollment.count({
+  where: { sessionId, status: 'ACTIVE' }
+});
+if (count >= session.maxCapacity) {
+  return { success: false, waitlist: true }
+}
+
+Admin can bypass capacity with an explicit force: true flag.
+Waitlist entries stored with position number; re-ordered on unenrollment.
+
+
+9.3 Attendance Locking Rules
+------------------------------
+- Attendance is OPEN after session ends and before teacher submits
+- Attendance is LOCKED after teacher calls the submit endpoint
+  (sets Attendance.lockedAt timestamp)
+- Only ADMIN or SUPER_ADMIN can call the unlock endpoint
+- Every lock/unlock action writes to AuditLog with actorId and reason
+
+
+9.4 Invoice Status Flow
+------------------------
+  DRAFT --> SENT --> PAID
+                 --> OVERDUE  (set by cron if past due date and unpaid)
+  DRAFT --> VOID
+  SENT  --> VOID
+
+Cron job runs nightly to move SENT invoices past their due date to OVERDUE.
+
+
+9.5 Stripe Webhook Events to Handle
+-------------------------------------
+payment_intent.succeeded
+  -> Mark Payment as PAID
+  -> Mark Invoice as PAID
+  -> Send receipt email via Resend
+
+payment_intent.payment_failed
+  -> Mark Payment as FAILED
+  -> Send failure notification to parent/student
+  -> Trigger retry logic
+
+customer.subscription.deleted
+  -> Disable auto-pay flag on FamilyGroup/Student
+  -> Notify admin
+
+All webhook handlers must verify the Stripe signature before processing.
+All webhook events must be logged to AuditLog.
+
+
+================================================================================
+10. NON-FUNCTIONAL REQUIREMENTS
+================================================================================
+
+Requirement        Target                    Notes
+-----------        ------                    -----
+Performance        < 2s page load (P95)       Next.js SSR caching, DB query optimization
+Uptime             99.9% availability         Vercel SLA + Supabase managed DB
+Security           OWASP Top 10 mitigated     Input validation, RBAC on all API routes
+Data Residency     US region default          Supabase US East, Vercel US East
+PCI Compliance     Stripe handles card data   No raw card data touches app servers
+FERPA Awareness    Student data protected     Access controls, minimal exposure to teachers
+Accessibility      WCAG 2.1 AA                shadcn/ui is ARIA-compliant; test with axe-core
+Mobile             Fully responsive           Mobile-first Tailwind for parent portal
+Scalability        10k students per studio    Indexed DB queries, pagination on all lists
+Audit Trail        Immutable AuditLog         All creates, updates, deletes, role actions logged
+
+
+================================================================================
+11. NOTES FOR AI-ASSISTED DEVELOPMENT (CURSOR / CLAUDE CODE)
+================================================================================
+
+11.1 Code Conventions
+----------------------
+- All components use TypeScript with strict mode enabled
+- All API routes validate input using Zod schemas before touching the database
+- All database queries use Prisma — no raw SQL except for complex aggregations
+- All Prisma calls happen server-side only (Server Components, Server Actions,
+  or API Route Handlers) — never in client components
+- Use the repository pattern: DB access functions in lib/db/*.ts, called from
+  API routes
+- All monetary values stored as integers in cents ($25.00 = 2500)
+- All dates stored as UTC; display in studio local timezone on client side
+- Animation: all Motion components require "use client" directive
+
+
+11.2 Prompt Guidance for Claude Code
+--------------------------------------
+- When building forms, generate together: Zod schema, React Hook Form
+  integration, API route handler, and Prisma mutation
+- When building list/table pages, always include pagination, search, and filters
+- When building role-gated routes, add getServerSession check at the top of
+  every server component or API handler
+- When building financial calculations, write pure functions in lib/billing.ts
+- When integrating Stripe, always handle both success redirect AND webhook
+  confirmation — never trust only the client redirect
+- When adding animated components, import variants from lib/motion.ts and
+  wrap with "use client"
+
+
+11.3 How to Start a Claude Code Session
+-----------------------------------------
+Open with this pattern:
+
+  "Read CLAUDE.md. We are on Phase [X]. Phases [1 through X-1] are complete.
+  Today we are implementing [specific feature]. Here is what already exists:
+  [brief summary of relevant completed work]."
+
+
+11.4 Initial Phase 1 Prompt
+-----------------------------
+Use this to kick off the project:
+
+  "Read CLAUDE.md. Initialize the project for Phase 1: create the Next.js 14
+  app with TypeScript, Tailwind CSS, and shadcn/ui. Implement the full Prisma
+  schema from the entity summary in CLAUDE.md. Configure NextAuth.js with the
+  five roles (SUPER_ADMIN, ADMIN, TEACHER, PARENT, STUDENT) and role-based
+  middleware. Build the role-aware layout shell with sidebar navigation.
+  Create lib/motion.ts with the standard animation variants. Generate the
+  database seed file with sample studio data including rooms, teachers,
+  students, class templates, and scheduled sessions."
+
+
+================================================================================
+12. APPENDIX: GLOSSARY
+================================================================================
+
+Term                Definition
+----                ----------
+Class Template      A reusable class type definition (e.g., "Beginner Ballet")
+                    used to create multiple scheduled sessions
+
+Class Session       A specific scheduled instance of a class template at a
+                    particular time, room, and with a specific teacher
+
+Enrollment          The active relationship between a Student and a Class Session
+
+FamilyGroup         A billing and relational unit grouping one or more guardians
+                    and their associated students
+
+PricingRule         A configurable discount rule applied to family group invoices
+                    (e.g., 50% off 2nd student)
+
+Scholarship         A discount or credit awarded to a student or family,
+                    reducing their invoice total
+
+Invoice             A billing document listing charges, discounts, and credits
+                    for a student or family for a billing period
+
+Attendance Record   A per-student, per-session record of presence status
+                    submitted by a teacher
+
+Room                A named physical space within the studio used for scheduling
+                    class sessions
+
+Widget              An embeddable JavaScript snippet showing the public schedule
+                    on external websites
+
+AuditLog            An immutable record of all significant platform actions
+                    for compliance and debugging
+
+RBAC                Role-Based Access Control — permissions determined by the
+                    user's assigned role
+
+lib/motion.ts       The single source of truth for all Motion animation variants.
+                    Import from here rather than defining animations inline.
+
+
+================================================================================
+END OF DOCUMENT
+Dance Studio Management Platform PRD v1.0 | Confidential
+================================================================================
