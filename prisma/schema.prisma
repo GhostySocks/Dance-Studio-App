@@ -1,0 +1,356 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  TEACHER
+  PARENT
+  STUDENT
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  WAITLIST
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  VOID
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum ScholarshipType {
+  PERCENT
+  FIXED
+  WAIVER
+}
+
+enum LineItemType {
+  TUITION
+  DISCOUNT
+  SCHOLARSHIP
+  FEE
+}
+
+enum DiscountType {
+  PERCENT_OFF
+  FIXED_PRICE
+  FAMILY_CAP
+}
+
+// ─── Auth Models (NextAuth) ──────────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Core Models ─────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String
+  image         String?
+  passwordHash  String?
+  role          UserRole  @default(PARENT)
+  accounts      Account[]
+  sessions      Session[]
+  student       Student?
+  guardian      Guardian?
+  teacher       Teacher?
+  auditLogs     AuditLog[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model StudioProfile {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  logo            String?
+  address         String?
+  phone           String?
+  email           String?
+  website         String?
+  timezone        String   @default("America/New_York")
+  billingCycleDay Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Student {
+  id            String        @id @default(cuid())
+  firstName     String
+  lastName      String
+  dateOfBirth   DateTime?
+  photo         String?
+  email         String?
+  phone         String?
+  medicalNotes  String?
+  notes         String?
+  user          User?         @relation(fields: [userId], references: [id])
+  userId        String?       @unique
+  guardian      Guardian?     @relation(fields: [guardianId], references: [id])
+  guardianId    String?
+  familyGroup   FamilyGroup?  @relation(fields: [familyGroupId], references: [id])
+  familyGroupId String?
+  enrollments   Enrollment[]
+  scholarships  Scholarship[]
+  invoices      Invoice[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model Guardian {
+  id           String                @id @default(cuid())
+  user         User                  @relation(fields: [userId], references: [id])
+  userId       String                @unique
+  phone        String?
+  address      String?
+  students     Student[]
+  familyGroups FamilyGroupGuardian[]
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+}
+
+model FamilyGroup {
+  id           String                @id @default(cuid())
+  name         String
+  students     Student[]
+  guardians    FamilyGroupGuardian[]
+  invoices     Invoice[]
+  scholarships Scholarship[]
+  pricingRules PricingRule[]
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+}
+
+model FamilyGroupGuardian {
+  id            String      @id @default(cuid())
+  familyGroup   FamilyGroup @relation(fields: [familyGroupId], references: [id])
+  familyGroupId String
+  guardian      Guardian    @relation(fields: [guardianId], references: [id])
+  guardianId    String
+
+  @@unique([familyGroupId, guardianId])
+}
+
+model Teacher {
+  id          String         @id @default(cuid())
+  user        User           @relation(fields: [userId], references: [id])
+  userId      String         @unique
+  bio         String?
+  specialties String[]
+  photo       String?
+  phone       String?
+  sessions    ClassSession[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model Room {
+  id          String         @id @default(cuid())
+  name        String
+  description String?
+  capacity    Int
+  sessions    ClassSession[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model ClassTemplate {
+  id                  String         @id @default(cuid())
+  name                String
+  description         String?
+  danceStyle          String?
+  skillLevel          String?
+  defaultDurationMins Int
+  basePriceCents      Int
+  isActive            Boolean        @default(true)
+  sessions            ClassSession[]
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+}
+
+model ClassSession {
+  id          String        @id @default(cuid())
+  template    ClassTemplate @relation(fields: [templateId], references: [id])
+  templateId  String
+  teacher     Teacher       @relation(fields: [teacherId], references: [id])
+  teacherId   String
+  room        Room          @relation(fields: [roomId], references: [id])
+  roomId      String
+  startTime   DateTime
+  endTime     DateTime
+  maxCapacity Int
+  isRecurring Boolean       @default(false)
+  notes       String?
+  enrollments Enrollment[]
+  attendance  Attendance[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Enrollment {
+  id         String           @id @default(cuid())
+  student    Student          @relation(fields: [studentId], references: [id])
+  studentId  String
+  session    ClassSession     @relation(fields: [sessionId], references: [id])
+  sessionId  String
+  status     EnrollmentStatus @default(ACTIVE)
+  attendance Attendance[]
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@unique([studentId, sessionId])
+}
+
+model Attendance {
+  id           String           @id @default(cuid())
+  enrollment   Enrollment       @relation(fields: [enrollmentId], references: [id])
+  enrollmentId String
+  session      ClassSession     @relation(fields: [sessionId], references: [id])
+  sessionId    String
+  status       AttendanceStatus
+  lockedAt     DateTime?
+  notes        String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([enrollmentId, sessionId])
+}
+
+model Invoice {
+  id            String            @id @default(cuid())
+  student       Student?          @relation(fields: [studentId], references: [id])
+  studentId     String?
+  familyGroup   FamilyGroup?      @relation(fields: [familyGroupId], references: [id])
+  familyGroupId String?
+  periodStart   DateTime
+  periodEnd     DateTime
+  dueDate       DateTime?
+  status        InvoiceStatus     @default(DRAFT)
+  totalCents    Int
+  lineItems     InvoiceLineItem[]
+  payments      Payment[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+}
+
+model InvoiceLineItem {
+  id          String       @id @default(cuid())
+  invoice     Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceId   String
+  description String
+  amountCents Int
+  type        LineItemType
+  createdAt   DateTime     @default(now())
+}
+
+model Payment {
+  id                    String        @id @default(cuid())
+  invoice               Invoice       @relation(fields: [invoiceId], references: [id])
+  invoiceId             String
+  amountCents           Int
+  stripePaymentIntentId String?       @unique
+  status                PaymentStatus @default(PENDING)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+}
+
+model Scholarship {
+  id            String          @id @default(cuid())
+  name          String
+  student       Student?        @relation(fields: [studentId], references: [id])
+  studentId     String?
+  familyGroup   FamilyGroup?    @relation(fields: [familyGroupId], references: [id])
+  familyGroupId String?
+  type          ScholarshipType
+  value         Int
+  startDate     DateTime
+  endDate       DateTime?
+  notes         String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
+
+model PricingRule {
+  id            String       @id @default(cuid())
+  name          String
+  familyGroup   FamilyGroup? @relation(fields: [familyGroupId], references: [id])
+  familyGroupId String?
+  triggerCount  Int          @default(2)
+  discountType  DiscountType
+  discountValue Int
+  isGlobal      Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actor      User?    @relation(fields: [actorId], references: [id])
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String
+  meta       Json?
+  createdAt  DateTime @default(now())
+}

@@ -296,14 +296,14 @@ NEXT_PUBLIC_STUDIO_SLUG="my-dance-studio"
 
 Update this section as phases are completed.
 
-- [ ] **Phase 1** — Project init, Prisma schema, NextAuth, layout shell, seed data
-- [ ] **Phase 2** — Student CRM, Guardian management, FamilyGroup, Teacher profiles
-- [ ] **Phase 3** — Room CRUD, Class Templates, Class Session scheduler, FullCalendar
-- [ ] **Phase 4** — Enrollment management, capacity/waitlist logic, confirmation emails
-- [ ] **Phase 5** — Attendance tracking, teacher submit/lock, admin reports
-- [ ] **Phase 6** — Pricing rules, invoice generation engine, scholarship system, PDF invoices
-- [ ] **Phase 7** — Stripe integration, parent payment portal, auto-pay, webhooks
-- [ ] **Phase 8** — Financial P&L dashboard, admin stats, utilization reports, CSV export
+- [x] **Phase 1** — Project init, Prisma schema, NextAuth, layout shell, seed data
+- [x] **Phase 2** — Student CRM, Guardian management, FamilyGroup, Teacher profiles
+- [x] **Phase 3** — Room CRUD, Class Templates, Class Session scheduler, FullCalendar
+- [x] **Phase 4** — Enrollment management, capacity/waitlist logic, confirmation emails
+- [x] **Phase 5** — Attendance tracking, teacher submit/lock, admin reports
+- [x] **Phase 6** — Pricing rules, invoice generation engine, scholarship system, PDF invoices
+- [x] **Phase 7** — Stripe integration, parent payment portal, auto-pay, webhooks
+- [x] **Phase 8** — Financial P&L dashboard, admin stats, utilization reports, CSV export
 - [ ] **Phase 9** — Public website (homepage, schedule, class detail, registration flow)
 - [ ] **Phase 10** — Embeddable widget, QA, accessibility, production deploy
 

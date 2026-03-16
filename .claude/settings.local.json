@@ -6,7 +6,23 @@
       "Bash(npx:*)",
       "Bash(node:*)",
       "Bash(shopt:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(mkdir:*)",
+      "Bash(ls:*)",
+      "Bash(npm ls:*)",
+      "Bash(rm:*)",
+      "Bash(npm run:*)",
+      "Bash(npm:*)",
+      "Bash(npx tsc:*)",
+      "Bash(curl:*)",
+      "Bash(npx kill-port:*)",
+      "Bash(wc:*)",
+      "Bash(taskkill:*)",
+      "Bash(find:*)",
+      "Bash(xargs grep:*)",
+      "Bash(find C:\\\\Users\\\\chmot\\\\Documents\\\\Dance-Studio-App\\\\app\\\\\\(app\\):*)",
+      "Bash(cat:*)",
+      "Bash(read f:*)"
     ]
   }
 }
