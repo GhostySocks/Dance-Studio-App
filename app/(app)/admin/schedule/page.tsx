@@ -1,5 +1,6 @@
 "use client";
 
+import type { z } from "zod";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -137,9 +138,8 @@ export default function SchedulePage() {
   const [detailSession, setDetailSession] = useState<Session | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm<ClassSessionFormData>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(classSessionSchema) as any,
+  const form = useForm<ClassSessionFormData, unknown, z.output<typeof classSessionSchema>>({
+    resolver: zodResolver(classSessionSchema),
     defaultValues: {
       templateId: "",
       teacherId: "",

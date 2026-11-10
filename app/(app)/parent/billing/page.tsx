@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { CreditCard, Loader2, X, FileDown } from "lucide-react";
+import { CreditCard, Loader2, X, FileDown, RefreshCw } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { StripeCardForm } from "@/components/forms/stripe-card-form";
 
 interface LineItem {
   id: string;
@@ -31,6 +32,24 @@ interface Invoice {
   familyGroup: { id: string; name: string } | null;
   lineItems: LineItem[];
   payments: { id: string; amountCents: number; status: string }[];
+}
+
+interface BillingAccount {
+  type: "family" | "student";
+  id: string;
+  name: string;
+  autoPayEnabled: boolean;
+  hasCard: boolean;
+}
+
+/** An open Stripe card form: paying one invoice, or saving a card for auto-pay. */
+type CardFlow =
+  | { kind: "payment"; clientSecret: string; invoice: Invoice }
+  | { kind: "setup"; clientSecret: string; account: BillingAccount };
+
+async function readError(res: Response, fallback: string) {
+  const json = await res.json().catch(() => null);
+  return typeof json?.error === "string" ? json.error : fallback;
 }
 
 function invoiceStatusVariant(
@@ -88,22 +107,33 @@ export default function ParentBillingPage() {
   const [loading, setLoading] = useState(true);
   const [detailInvoice, setDetailInvoice] = useState<Invoice | null>(null);
   const [paying, setPaying] = useState<string | null>(null);
+  const [accounts, setAccounts] = useState<BillingAccount[]>([]);
+  const [accountBusy, setAccountBusy] = useState<string | null>(null);
+  const [cardFlow, setCardFlow] = useState<CardFlow | null>(null);
+
+  const loadData = useCallback(async () => {
+    try {
+      const [invoiceRes, accountRes] = await Promise.all([
+        fetch("/api/parent/invoices"),
+        fetch("/api/payments/auto-pay"),
+      ]);
+      if (!invoiceRes.ok) throw new Error("Failed");
+      const invoiceJson = await invoiceRes.json();
+      setInvoices(invoiceJson.data || []);
+      if (accountRes.ok) {
+        const accountJson = await accountRes.json();
+        setAccounts(accountJson.data || []);
+      }
+    } catch {
+      toast.error("Failed to load invoices");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    async function fetchInvoices() {
-      try {
-        const res = await fetch("/api/parent/invoices");
-        if (!res.ok) throw new Error("Failed");
-        const json = await res.json();
-        setInvoices(json.data || []);
-      } catch {
-        toast.error("Failed to load invoices");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchInvoices();
-  }, []);
+    loadData();
+  }, [loadData]);
 
   async function handlePay(invoiceId: string) {
     setPaying(invoiceId);
@@ -114,24 +144,82 @@ export default function ParentBillingPage() {
         body: JSON.stringify({ invoiceId }),
       });
 
-      if (!res.ok) {
-        const json = await res.json();
-        throw new Error(typeof json.error === "string" ? json.error : "Payment failed");
-      }
+      if (!res.ok) throw new Error(await readError(res, "Payment failed"));
 
       const json = await res.json();
-
-      // In production, you'd use Stripe Elements here with the clientSecret
-      // For now, show success that payment intent was created
-      toast.success(
-        "Payment intent created. In production, this would open the Stripe checkout."
-      );
-      console.log("Stripe client secret:", json.data.clientSecret);
+      const invoice = invoices.find((inv) => inv.id === invoiceId);
+      if (invoice) {
+        setCardFlow({ kind: "payment", clientSecret: json.data.clientSecret, invoice });
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Payment failed";
       toast.error(message);
     } finally {
       setPaying(null);
+    }
+  }
+
+  async function handlePaymentConfirmed(paymentIntentId: string) {
+    const res = await fetch("/api/payments/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paymentIntentId }),
+    });
+    const json = await res.json().catch(() => null);
+    setCardFlow(null);
+    if (res.ok && json?.data?.status === "succeeded") {
+      toast.success("Payment received. A receipt is on its way to your email.");
+    } else {
+      toast.info("Your payment is processing. This page will update once it clears.");
+    }
+    await loadData();
+  }
+
+  async function handleEnableAutoPay(account: BillingAccount) {
+    setAccountBusy(account.id);
+    try {
+      const res = await fetch("/api/payments/auto-pay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountType: account.type, accountId: account.id }),
+      });
+      if (!res.ok) throw new Error(await readError(res, "Could not start auto-pay setup"));
+      const json = await res.json();
+      setCardFlow({ kind: "setup", clientSecret: json.data.clientSecret, account });
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Could not start auto-pay setup");
+    } finally {
+      setAccountBusy(null);
+    }
+  }
+
+  async function handleCardSaved(account: BillingAccount, setupIntentId: string) {
+    const res = await fetch("/api/payments/auto-pay", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountType: account.type, accountId: account.id, setupIntentId }),
+    });
+    if (!res.ok) throw new Error(await readError(res, "Card could not be verified"));
+    setCardFlow(null);
+    toast.success(`Auto-pay is on for ${account.name}`);
+    await loadData();
+  }
+
+  async function handleDisableAutoPay(account: BillingAccount) {
+    setAccountBusy(account.id);
+    try {
+      const res = await fetch("/api/payments/auto-pay", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountType: account.type, accountId: account.id }),
+      });
+      if (!res.ok) throw new Error(await readError(res, "Could not turn off auto-pay"));
+      toast.success(`Auto-pay is off for ${account.name}`);
+      await loadData();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Could not turn off auto-pay");
+    } finally {
+      setAccountBusy(null);
     }
   }
 
@@ -220,6 +308,54 @@ export default function ParentBillingPage() {
         </Card>
       )}
 
+      {/* Auto-pay */}
+      {accounts.length > 0 && (
+        <div>
+          <h2 className="text-lg font-semibold mb-3">Auto-pay</h2>
+          <div className="space-y-2">
+            {accounts.map((account) => (
+              <Card key={`${account.type}-${account.id}`}>
+                <CardContent className="py-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <RefreshCw className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium">{account.name}</p>
+                          <Badge variant={account.autoPayEnabled ? "default" : "outline"}>
+                            {account.autoPayEnabled ? "ON" : "OFF"}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {account.autoPayEnabled
+                            ? "New invoices are charged to your saved card automatically."
+                            : "Save a card and each new invoice will be charged automatically."}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={accountBusy === account.id}
+                      onClick={() =>
+                        account.autoPayEnabled
+                          ? handleDisableAutoPay(account)
+                          : handleEnableAutoPay(account)
+                      }
+                    >
+                      {accountBusy === account.id && (
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                      )}
+                      {account.autoPayEnabled ? "Turn off" : "Set up"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Payment History */}
       {paid.length > 0 && (
         <div>
@@ -291,6 +427,44 @@ export default function ParentBillingPage() {
           </div>
         </div>
       )}
+
+      {/* Card payment / auto-pay setup */}
+      <Modal
+        open={!!cardFlow}
+        onClose={() => setCardFlow(null)}
+        title={cardFlow?.kind === "setup" ? "Set up auto-pay" : "Pay invoice"}
+      >
+        {cardFlow?.kind === "payment" && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {formatDate(cardFlow.invoice.periodStart)} – {formatDate(cardFlow.invoice.periodEnd)}
+            </p>
+            <StripeCardForm
+              key={cardFlow.clientSecret}
+              mode="payment"
+              clientSecret={cardFlow.clientSecret}
+              submitLabel={`Pay ${formatCurrency(cardFlow.invoice.totalCents)}`}
+              onSuccess={handlePaymentConfirmed}
+            />
+          </div>
+        )}
+        {cardFlow?.kind === "setup" && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Save a card for {cardFlow.account.name}. Each new invoice will be charged to it
+              automatically, and you&apos;ll get a receipt by email. You can turn this off at any
+              time.
+            </p>
+            <StripeCardForm
+              key={cardFlow.clientSecret}
+              mode="setup"
+              clientSecret={cardFlow.clientSecret}
+              submitLabel="Save card and turn on auto-pay"
+              onSuccess={(setupIntentId) => handleCardSaved(cardFlow.account, setupIntentId)}
+            />
+          </div>
+        )}
+      </Modal>
 
       {/* Invoice Detail Modal */}
       <Modal

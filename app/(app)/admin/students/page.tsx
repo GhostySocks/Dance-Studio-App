@@ -1,5 +1,6 @@
 "use client";
 
+import type { z } from "zod";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -114,9 +115,8 @@ export default function StudentsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const form = useForm<StudentFormData>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(studentSchema) as any,
+  const form = useForm<StudentFormData, unknown, z.output<typeof studentSchema>>({
+    resolver: zodResolver(studentSchema),
     defaultValues: {
       firstName: "",
       lastName: "",

@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 import { staggerContainer } from "@/lib/motion";
+import { CategoryBarChart, RevenueBarChart } from "@/components/charts/bar-charts";
 
 interface Overview {
   totalStudents: number;
@@ -49,15 +50,6 @@ interface ChartData {
   roomUtilization: { name: string; sessions: number; capacity: number }[];
 }
 
-const BAR_COLORS = [
-  "bg-domain-classes", "bg-domain-people", "bg-domain-money",
-  "bg-domain-schedule", "bg-domain-alert",
-];
-
-const DOT_COLORS = [
-  "hsl(270 55% 90%)", "hsl(135 60% 88%)", "hsl(52 80% 85%)",
-  "hsl(210 60% 90%)", "hsl(340 60% 90%)",
-];
 
 export default function AdminDashboardPage() {
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -96,9 +88,7 @@ export default function AdminDashboardPage() {
     );
   }
 
-  const revenueMax = Math.max(...(charts?.monthlyRevenue?.map((r) => r.total) ?? [0]), 1);
   const roomMax = Math.max(...(charts?.roomUtilization?.map((r) => r.sessions) ?? [0]), 1);
-  const styleTotal = charts?.enrollmentsByStyle?.reduce((s, e) => s + e.count, 0) ?? 1;
 
   return (
     <div className="space-y-6">
@@ -189,30 +179,7 @@ export default function AdminDashboardPage() {
           </CardHeader>
           <CardContent>
             {charts?.monthlyRevenue && charts.monthlyRevenue.length > 0 ? (
-              <div className="space-y-3">
-                {charts.monthlyRevenue.map((item, i) => (
-                  <motion.div
-                    key={item.month}
-                    className="space-y-1.5"
-                    initial={{ opacity: 0, x: -16 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.4 + i * 0.05 }}
-                  >
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground font-medium">{item.month}</span>
-                      <span className="font-semibold">{formatCurrency(item.total)}</span>
-                    </div>
-                    <div className="h-7 w-full rounded-xl bg-muted/60 overflow-hidden">
-                      <motion.div
-                        className="h-full rounded-xl bg-domain-money"
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(item.total / revenueMax) * 100}%` }}
-                        transition={{ duration: 0.6, delay: 0.5 + i * 0.05, ease: "easeOut" }}
-                      />
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
+              <RevenueBarChart data={charts.monthlyRevenue} />
             ) : (
               <p className="text-sm text-muted-foreground text-center py-8">
                 No revenue data yet.
@@ -228,38 +195,11 @@ export default function AdminDashboardPage() {
           </CardHeader>
           <CardContent>
             {charts?.enrollmentsByStyle && charts.enrollmentsByStyle.length > 0 ? (
-              <div className="space-y-3">
-                {charts.enrollmentsByStyle.map((item, i) => (
-                  <motion.div
-                    key={item.style}
-                    className="space-y-1.5"
-                    initial={{ opacity: 0, x: -16 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.4 + i * 0.05 }}
-                  >
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="h-3 w-3 rounded-full shrink-0"
-                          style={{ backgroundColor: DOT_COLORS[i % DOT_COLORS.length] }}
-                        />
-                        <span className="font-medium">{item.style}</span>
-                      </div>
-                      <span className="font-semibold">
-                        {item.count} <span className="text-muted-foreground font-normal">({Math.round((item.count / styleTotal) * 100)}%)</span>
-                      </span>
-                    </div>
-                    <div className="h-5 w-full rounded-xl bg-muted/60 overflow-hidden">
-                      <motion.div
-                        className={`h-full rounded-xl ${BAR_COLORS[i % BAR_COLORS.length]}`}
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(item.count / styleTotal) * 100}%` }}
-                        transition={{ duration: 0.6, delay: 0.5 + i * 0.05, ease: "easeOut" }}
-                      />
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
+              <CategoryBarChart
+                data={charts.enrollmentsByStyle.map((e) => ({ name: e.style, count: e.count }))}
+                unit="enrollments"
+                ariaLabel="Active enrollments by dance style"
+              />
             ) : (
               <p className="text-sm text-muted-foreground text-center py-8">
                 No enrollment data yet.

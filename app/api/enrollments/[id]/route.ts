@@ -7,6 +7,7 @@ import {
   cancelEnrollment,
   deleteEnrollment,
 } from "@/lib/db/enrollment";
+import { sendEnrollmentConfirmation } from "@/lib/email";
 import { enrollmentStatusSchema } from "@/lib/validations/enrollment";
 
 export async function GET(
@@ -52,6 +53,10 @@ export async function PUT(
 
     if (parsed.data.status === "CANCELLED") {
       const result = await cancelEnrollment(params.id);
+      if (result.promoted) {
+        // Tell the promoted student they are off the waitlist
+        await sendEnrollmentConfirmation(result.promoted.id);
+      }
       return NextResponse.json({
         data: result.cancelled,
         promoted: result.promoted
@@ -64,6 +69,7 @@ export async function PUT(
     }
 
     const enrollment = await updateEnrollmentStatus(params.id, parsed.data.status);
+    await sendEnrollmentConfirmation(enrollment.id);
     return NextResponse.json({ data: enrollment });
   } catch (error) {
     console.error("PUT /api/enrollments/[id] error:", error);

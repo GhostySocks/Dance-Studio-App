@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getEnrollments, enrollStudent, bulkEnrollStudents } from "@/lib/db/enrollment";
 import { enrollmentSchema, bulkEnrollSchema } from "@/lib/validations/enrollment";
+import { sendEnrollmentConfirmation } from "@/lib/email";
 
 export async function GET(req: NextRequest) {
   try {
@@ -47,6 +48,9 @@ export async function POST(req: NextRequest) {
         );
       }
       const results = await bulkEnrollStudents(parsed.data);
+      await Promise.all(
+        results.map((r) => (r.enrollment ? sendEnrollmentConfirmation(r.enrollment.id) : null))
+      );
       return NextResponse.json({ data: results }, { status: 201 });
     }
 
@@ -61,6 +65,10 @@ export async function POST(req: NextRequest) {
     const result = await enrollStudent(parsed.data);
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 409 });
+    }
+
+    if (result.enrollment) {
+      await sendEnrollmentConfirmation(result.enrollment.id);
     }
 
     return NextResponse.json(

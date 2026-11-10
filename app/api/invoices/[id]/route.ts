@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getInvoiceById, updateInvoiceStatus, deleteInvoice } from "@/lib/db/invoices";
 import { invoiceStatusSchema } from "@/lib/validations/invoice";
+import { sendInvoiceEmail } from "@/lib/email";
 
 export async function GET(
   req: NextRequest,
@@ -46,6 +47,11 @@ export async function PUT(
     }
 
     const invoice = await updateInvoiceStatus(params.id, parsed.data.status);
+    if (parsed.data.status === "SENT") {
+      await sendInvoiceEmail(invoice.id, "sent");
+    } else if (parsed.data.status === "PAID") {
+      await sendInvoiceEmail(invoice.id, "receipt");
+    }
     return NextResponse.json({ data: invoice });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Internal server error";

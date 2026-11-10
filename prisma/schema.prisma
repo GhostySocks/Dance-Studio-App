@@ -154,6 +154,9 @@ model Student {
   enrollments   Enrollment[]
   scholarships  Scholarship[]
   invoices      Invoice[]
+  stripeCustomerId      String?  @unique
+  stripePaymentMethodId String?
+  autoPayEnabled        Boolean  @default(false)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 }
@@ -178,6 +181,9 @@ model FamilyGroup {
   invoices     Invoice[]
   scholarships Scholarship[]
   pricingRules PricingRule[]
+  stripeCustomerId      String?  @unique
+  stripePaymentMethodId String?
+  autoPayEnabled        Boolean  @default(false)
   createdAt    DateTime              @default(now())
   updatedAt    DateTime              @updatedAt
 }

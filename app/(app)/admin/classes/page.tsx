@@ -1,5 +1,6 @@
 "use client";
 
+import type { z } from "zod";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -101,9 +102,8 @@ export default function ClassesPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const form = useForm<ClassTemplateFormData>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(classTemplateSchema) as any,
+  const form = useForm<ClassTemplateFormData, unknown, z.output<typeof classTemplateSchema>>({
+    resolver: zodResolver(classTemplateSchema),
     defaultValues: {
       name: "",
       description: "",

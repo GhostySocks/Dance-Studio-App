@@ -1,24 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
-import { markPaymentPaid, markPaymentFailed } from "@/lib/db/payments";
+import {
+  handleAutoPayCancelled,
+  settlePaymentFailed,
+  settlePaymentSucceeded,
+} from "@/lib/payment-service";
 import type Stripe from "stripe";
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
   const signature = req.headers.get("stripe-signature");
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
   if (!signature) {
     return NextResponse.json({ error: "Missing signature" }, { status: 400 });
+  }
+  if (!stripe || !webhookSecret) {
+    console.error("Stripe webhook received but Stripe is not configured");
+    return NextResponse.json({ error: "Webhook not configured" }, { status: 500 });
   }
 
   let event: Stripe.Event;
 
   try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
-    );
+    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Invalid signature";
     console.error("Stripe webhook signature verification failed:", message);
@@ -28,26 +33,31 @@ export async function POST(req: NextRequest) {
   try {
     switch (event.type) {
       case "payment_intent.succeeded": {
-        const paymentIntent = event.data.object as Stripe.PaymentIntent;
-        await markPaymentPaid(paymentIntent.id);
-        console.log(`Payment succeeded: ${paymentIntent.id}`);
+        // Marks Payment + Invoice PAID and emails the receipt (once)
+        await settlePaymentSucceeded(event.data.object.id);
         break;
       }
 
       case "payment_intent.payment_failed": {
-        const paymentIntent = event.data.object as Stripe.PaymentIntent;
-        await markPaymentFailed(paymentIntent.id);
-        console.log(`Payment failed: ${paymentIntent.id}`);
+        // Marks Payment FAILED and emails the payer (once)
+        await settlePaymentFailed(event.data.object.id);
+        break;
+      }
+
+      case "customer.subscription.deleted": {
+        const customer = event.data.object.customer;
+        const customerId = typeof customer === "string" ? customer : customer.id;
+        await handleAutoPayCancelled(customerId, "Stripe subscription cancelled");
         break;
       }
 
       default:
-        console.log(`Unhandled event type: ${event.type}`);
+        break;
     }
 
     return NextResponse.json({ received: true });
   } catch (error) {
-    console.error("Stripe webhook handler error:", error);
+    console.error(`Stripe webhook handler error (${event.type}):`, error);
     return NextResponse.json({ error: "Webhook handler failed" }, { status: 500 });
   }
 }

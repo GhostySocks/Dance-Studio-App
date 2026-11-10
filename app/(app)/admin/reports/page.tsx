@@ -28,8 +28,48 @@ interface RoomStat {
   avgOccupancy: number;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function exportCSV(data: any[], filename: string) {
+interface RevenueInvoice {
+  id: string;
+  status: string;
+  totalCents: number;
+  periodStart: string;
+  periodEnd: string;
+  createdAt: string;
+  student: { firstName: string; lastName: string } | null;
+  familyGroup: { name: string } | null;
+}
+
+interface EnrollmentRow {
+  id: string;
+  status: string;
+  createdAt: string;
+  student: { firstName: string; lastName: string };
+  session: {
+    template: { name: string; danceStyle: string | null; basePriceCents: number };
+    teacher: { user: { name: string } } | null;
+  };
+}
+
+type ReportData =
+  | {
+      type: "revenue";
+      invoices: RevenueInvoice[];
+      summary: {
+        totalRevenue: number;
+        totalTuition: number;
+        totalDiscounts: number;
+        totalScholarships: number;
+        invoiceCount: number;
+      };
+    }
+  | {
+      type: "enrollment";
+      enrollments: EnrollmentRow[];
+      summary: { total: number; active: number; waitlist: number; cancelled: number };
+    }
+  | { type: "utilization"; rooms: RoomStat[] };
+
+function exportCSV(data: Record<string, string | number>[], filename: string) {
   if (data.length === 0) {
     toast.error("No data to export");
     return;
@@ -65,8 +105,7 @@ export default function ReportsPage() {
   const [endDate, setEndDate] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [reportData, setReportData] = useState<any>(null);
+  const [reportData, setReportData] = useState<ReportData | null>(null);
 
   const fetchReport = useCallback(async () => {
     setLoading(true);
@@ -93,10 +132,9 @@ export default function ReportsPage() {
   function handleExport() {
     if (!reportData) return;
 
-    switch (reportType) {
+    switch (reportData.type) {
       case "revenue": {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const rows = reportData.invoices.map((inv: any) => ({
+        const rows = reportData.invoices.map((inv) => ({
           ID: inv.id,
           "Bill To": inv.familyGroup?.name || (inv.student ? `${inv.student.firstName} ${inv.student.lastName}` : "-"),
           Status: inv.status,
@@ -109,8 +147,7 @@ export default function ReportsPage() {
         break;
       }
       case "enrollment": {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const rows = reportData.enrollments.map((e: any) => ({
+        const rows = reportData.enrollments.map((e) => ({
           Student: `${e.student.firstName} ${e.student.lastName}`,
           Class: e.session.template.name,
           Style: e.session.template.danceStyle || "-",
@@ -123,7 +160,7 @@ export default function ReportsPage() {
         break;
       }
       case "utilization": {
-        const rows = reportData.rooms.map((r: RoomStat) => ({
+        const rows = reportData.rooms.map((r) => ({
           Room: r.name,
           Capacity: r.capacity,
           "Total Sessions": r.totalSessions,
@@ -192,7 +229,7 @@ export default function ReportsPage() {
       )}
 
       {/* Revenue Report */}
-      {!loading && reportType === "revenue" && reportData && (
+      {!loading && reportData?.type === "revenue" && (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Card>
@@ -246,8 +283,7 @@ export default function ReportsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                      {reportData.invoices.map((inv: any) => (
+                      {reportData.invoices.map((inv) => (
                         <tr key={inv.id} className="border-t">
                           <td className="px-3 py-2">
                             {inv.familyGroup?.name || (inv.student ? `${inv.student.firstName} ${inv.student.lastName}` : "-")}
@@ -273,7 +309,7 @@ export default function ReportsPage() {
       )}
 
       {/* Enrollment Report */}
-      {!loading && reportType === "enrollment" && reportData && (
+      {!loading && reportData?.type === "enrollment" && (
         <>
           <div className="grid gap-4 sm:grid-cols-4">
             <Card>
@@ -320,8 +356,7 @@ export default function ReportsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                      {reportData.enrollments.map((e: any) => (
+                      {reportData.enrollments.map((e) => (
                         <tr key={e.id} className="border-t">
                           <td className="px-3 py-2 font-medium">{e.student.firstName} {e.student.lastName}</td>
                           <td className="px-3 py-2">{e.session.template.name}</td>
@@ -348,7 +383,7 @@ export default function ReportsPage() {
       )}
 
       {/* Utilization Report */}
-      {!loading && reportType === "utilization" && reportData && (
+      {!loading && reportData?.type === "utilization" && (
         <>
           {reportData.rooms?.length > 0 && (
             <Card>

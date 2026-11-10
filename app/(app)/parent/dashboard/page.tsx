@@ -38,11 +38,10 @@ export default function ParentDashboardPage() {
         let activeEnrollments = 0;
         if (studentsRes.ok) {
           const json = await studentsRes.json();
-          const students = json.data || [];
+          const students: { enrollments?: unknown[] }[] = json.data || [];
           studentCount = students.length;
           activeEnrollments = students.reduce(
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (sum: number, s: any) => sum + (s.enrollments?.length || 0),
+            (sum, s) => sum + (s.enrollments?.length || 0),
             0
           );
         }
@@ -51,14 +50,12 @@ export default function ParentDashboardPage() {
         let unpaidTotal = 0;
         if (invoicesRes.ok) {
           const json = await invoicesRes.json();
-          const invoices = json.data || [];
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const unpaid = invoices.filter((inv: any) =>
+          const invoices: { status: string; totalCents: number }[] = json.data || [];
+          const unpaid = invoices.filter((inv) =>
             ["SENT", "OVERDUE"].includes(inv.status)
           );
           unpaidCount = unpaid.length;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          unpaidTotal = unpaid.reduce((sum: number, inv: any) => sum + inv.totalCents, 0);
+          unpaidTotal = unpaid.reduce((sum, inv) => sum + inv.totalCents, 0);
         }
 
         let upcomingClasses = 0;

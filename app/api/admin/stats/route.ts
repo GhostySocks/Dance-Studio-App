@@ -112,7 +112,7 @@ export async function GET() {
           AND cs."startTime" <= $2
         GROUP BY r.id, r.name, r.capacity
         ORDER BY sessions DESC
-      `, startOfMonth.toISOString(), endOfMonth.toISOString());
+      `, startOfMonth, endOfMonth);
       roomUtilizationData = raw.map((r) => ({ name: r.name, sessions: Number(r.sessions), capacity: Number(r.capacity) }));
     } catch (e) {
       console.error("Room utilization chart query failed:", e);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +32,18 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/admin/dashboard");
+    // Send each role to its own portal
+    const session = await getSession();
+    const role = session?.user?.role;
+    const home =
+      role === "TEACHER"
+        ? "/teacher/dashboard"
+        : role === "PARENT"
+          ? "/parent/dashboard"
+          : role === "STUDENT"
+            ? "/" // no student portal yet
+            : "/admin/dashboard";
+    router.push(home);
     router.refresh();
   }
 

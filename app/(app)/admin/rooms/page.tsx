@@ -1,5 +1,6 @@
 "use client";
 
+import type { z } from "zod";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -77,9 +78,8 @@ export default function RoomsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const form = useForm<RoomFormData>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(roomSchema) as any,
+  const form = useForm<RoomFormData, unknown, z.output<typeof roomSchema>>({
+    resolver: zodResolver(roomSchema),
     defaultValues: {
       name: "",
       description: "",

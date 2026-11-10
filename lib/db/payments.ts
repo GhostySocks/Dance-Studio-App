@@ -19,38 +19,82 @@ export async function createPayment({
   });
 }
 
+/**
+ * Marks a payment PAID and, once the invoice is fully covered, marks the invoice PAID.
+ * Idempotent: safe to call from the webhook, the confirm endpoint and the cron job
+ * for the same PaymentIntent. Returns null if we have no record of the PaymentIntent.
+ */
 export async function markPaymentPaid(stripePaymentIntentId: string) {
-  const payment = await prisma.payment.update({
+  const payment = await prisma.payment.findUnique({
     where: { stripePaymentIntentId },
-    data: { status: "PAID" },
+    select: { id: true, invoiceId: true },
   });
+  if (!payment) return null;
 
-  // Check if invoice is fully paid
-  const payments = await prisma.payment.findMany({
-    where: { invoiceId: payment.invoiceId, status: "PAID" },
-    select: { amountCents: true },
-  });
-  const totalPaid = payments.reduce((sum, p) => sum + p.amountCents, 0);
-
-  const invoice = await prisma.invoice.findUnique({
-    where: { id: payment.invoiceId },
-    select: { totalCents: true },
-  });
-
-  if (invoice && totalPaid >= invoice.totalCents) {
-    await prisma.invoice.update({
-      where: { id: payment.invoiceId },
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.payment.updateMany({
+      where: { id: payment.id, status: { not: "PAID" } },
       data: { status: "PAID" },
     });
-  }
+    if (updated.count === 0) {
+      return { invoiceId: payment.invoiceId, newlyPaid: false, invoicePaid: false };
+    }
 
-  return payment;
+    const [paid, invoice] = await Promise.all([
+      tx.payment.aggregate({
+        where: { invoiceId: payment.invoiceId, status: "PAID" },
+        _sum: { amountCents: true },
+      }),
+      tx.invoice.findUnique({
+        where: { id: payment.invoiceId },
+        select: { totalCents: true, status: true },
+      }),
+    ]);
+
+    const invoicePaid =
+      !!invoice &&
+      invoice.status !== "VOID" &&
+      (paid._sum.amountCents ?? 0) >= invoice.totalCents;
+
+    if (invoicePaid && invoice.status !== "PAID") {
+      await tx.invoice.update({
+        where: { id: payment.invoiceId },
+        data: { status: "PAID" },
+      });
+    }
+
+    return { invoiceId: payment.invoiceId, newlyPaid: true, invoicePaid };
+  });
 }
 
+/** Marks a pending payment FAILED. Idempotent; returns null for unknown PaymentIntents. */
 export async function markPaymentFailed(stripePaymentIntentId: string) {
-  return prisma.payment.update({
+  const payment = await prisma.payment.findUnique({
     where: { stripePaymentIntentId },
+    select: { id: true, invoiceId: true },
+  });
+  if (!payment) return null;
+
+  const updated = await prisma.payment.updateMany({
+    where: { id: payment.id, status: "PENDING" },
     data: { status: "FAILED" },
+  });
+  return { invoiceId: payment.invoiceId, newlyFailed: updated.count > 0 };
+}
+
+export async function getPaymentByIntentId(stripePaymentIntentId: string) {
+  return prisma.payment.findUnique({
+    where: { stripePaymentIntentId },
+    select: { id: true, invoiceId: true, status: true, amountCents: true },
+  });
+}
+
+/** Most recent pending Stripe payment for an invoice, so an open PaymentIntent can be reused. */
+export async function getPendingPayment(invoiceId: string) {
+  return prisma.payment.findFirst({
+    where: { invoiceId, status: "PENDING", stripePaymentIntentId: { not: null } },
+    select: { id: true, amountCents: true, stripePaymentIntentId: true },
+    orderBy: { createdAt: "desc" },
   });
 }
 
