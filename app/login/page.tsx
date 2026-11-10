@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { portalHome } from "@/lib/portal";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -34,15 +36,7 @@ export default function LoginPage() {
 
     // Send each role to its own portal
     const session = await getSession();
-    const role = session?.user?.role;
-    const home =
-      role === "TEACHER"
-        ? "/teacher/dashboard"
-        : role === "PARENT"
-          ? "/parent/dashboard"
-          : role === "STUDENT"
-            ? "/" // no student portal yet
-            : "/admin/dashboard";
+    const home = portalHome(session?.user?.role);
     router.push(home);
     router.refresh();
   }
@@ -88,6 +82,12 @@ export default function LoginPage() {
             {loading ? "Signing in..." : "Sign in"}
           </Button>
         </form>
+        <p className="text-center text-sm text-muted-foreground">
+          New here?{" "}
+          <Link href="/register" className="font-medium text-primary underline-offset-4 hover:underline">
+            Create an account
+          </Link>
+        </p>
       </div>
     </div>
   );

@@ -105,32 +105,28 @@ export async function getPaymentsByInvoice(invoiceId: string) {
   });
 }
 
+/** Students a portal user sees: a guardian's children, or the adult student themself. */
+function ownStudents(userId: string) {
+  return { OR: [{ guardian: { userId } }, { userId }] };
+}
+
 export async function getParentInvoices(userId: string) {
-  // Find guardian profile for this user
-  const guardian = await prisma.guardian.findUnique({
-    where: { userId },
-    select: { id: true },
-  });
-
-  if (!guardian) return [];
-
-  // Get family groups this guardian belongs to
-  const familyGroupLinks = await prisma.familyGroupGuardian.findMany({
-    where: { guardianId: guardian.id },
-    select: { familyGroupId: true },
-  });
+  const [familyGroupLinks, students] = await Promise.all([
+    prisma.familyGroupGuardian.findMany({
+      where: { guardian: { userId } },
+      select: { familyGroupId: true },
+    }),
+    prisma.student.findMany({ where: ownStudents(userId), select: { id: true } }),
+  ]);
   const familyGroupIds = familyGroupLinks.map((l) => l.familyGroupId);
-
-  // Get students linked to this guardian
-  const students = await prisma.student.findMany({
-    where: { guardianId: guardian.id },
-    select: { id: true },
-  });
   const studentIds = students.map((s) => s.id);
 
-  // Get invoices for these family groups and students
+  if (familyGroupIds.length === 0 && studentIds.length === 0) return [];
+
   return prisma.invoice.findMany({
     where: {
+      // Drafts are internal until the studio sends them
+      status: { not: "DRAFT" },
       OR: [
         ...(familyGroupIds.length > 0 ? [{ familyGroupId: { in: familyGroupIds } }] : []),
         ...(studentIds.length > 0 ? [{ studentId: { in: studentIds } }] : []),
@@ -147,15 +143,8 @@ export async function getParentInvoices(userId: string) {
 }
 
 export async function getParentStudents(userId: string) {
-  const guardian = await prisma.guardian.findUnique({
-    where: { userId },
-    select: { id: true },
-  });
-
-  if (!guardian) return [];
-
   return prisma.student.findMany({
-    where: { guardianId: guardian.id },
+    where: ownStudents(userId),
     include: {
       familyGroup: { select: { id: true, name: true } },
       enrollments: {
@@ -176,22 +165,9 @@ export async function getParentStudents(userId: string) {
 }
 
 export async function getParentSchedule(userId: string) {
-  const guardian = await prisma.guardian.findUnique({
-    where: { userId },
-    select: { id: true },
-  });
-
-  if (!guardian) return [];
-
-  const students = await prisma.student.findMany({
-    where: { guardianId: guardian.id },
-    select: { id: true, firstName: true, lastName: true },
-  });
-  const studentIds = students.map((s) => s.id);
-
-  const enrollments = await prisma.enrollment.findMany({
+  return prisma.enrollment.findMany({
     where: {
-      studentId: { in: studentIds },
+      student: ownStudents(userId),
       status: "ACTIVE",
       session: { startTime: { gte: new Date() } },
     },
@@ -207,6 +183,4 @@ export async function getParentSchedule(userId: string) {
     },
     orderBy: { session: { startTime: "asc" } },
   });
-
-  return enrollments;
 }

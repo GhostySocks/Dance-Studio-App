@@ -6,6 +6,7 @@ import { Users, Calendar, Receipt, BookOpen } from "lucide-react";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/page-header";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -92,7 +93,11 @@ export default function ParentDashboardPage() {
       <PageHeader
         title="Parent Dashboard"
         description="Manage your children&apos;s enrollments, schedule, and billing."
-      />
+      >
+        <Button nativeButton={false} render={<Link href="/schedule" />}>
+          Enroll in a class
+        </Button>
+      </PageHeader>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Link href="/parent/students">

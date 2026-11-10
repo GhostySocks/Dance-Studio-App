@@ -56,6 +56,12 @@ const parentNav: NavItem[] = [
   { title: "Billing", href: "/parent/billing", icon: Receipt },
 ];
 
+const studentNav: NavItem[] = [
+  { title: "Dashboard", href: "/student/dashboard", icon: LayoutDashboard },
+  { title: "Schedule", href: "/student/schedule", icon: Calendar },
+  { title: "Billing", href: "/student/billing", icon: Receipt },
+];
+
 function getNavForRole(role: string): { label: string; items: NavItem[] } {
   switch (role) {
     case "SUPER_ADMIN":
@@ -66,7 +72,7 @@ function getNavForRole(role: string): { label: string; items: NavItem[] } {
     case "PARENT":
       return { label: "Parent Portal", items: parentNav };
     case "STUDENT":
-      return { label: "Student Portal", items: parentNav };
+      return { label: "Student Portal", items: studentNav };
     default:
       return { label: "Navigation", items: [] };
   }

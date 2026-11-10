@@ -22,13 +22,13 @@ The app also has a **public-facing website** (homepage, schedule, class detail, 
 |---|---|
 | Framework | Next.js 14 (App Router) |
 | Language | TypeScript (strict mode) |
-| Styling | Tailwind CSS + shadcn/ui |
+| Styling | Tailwind CSS v3 + shadcn/ui v4 (built on `@base-ui/react`: use the `render` prop, not `asChild`) |
 | State | Zustand (global) + TanStack Query (server state) |
 | Animation | Motion (motion.dev) |
 | Forms | React Hook Form + Zod |
-| ORM | Prisma |
+| ORM | Prisma 5 (not v7) |
 | Database | PostgreSQL (Supabase or Neon) |
-| Auth | NextAuth.js (Auth.js v5) |
+| Auth | NextAuth.js v4 (credentials provider, JWT sessions) — not Auth.js v5 |
 | Payments | Stripe (Checkout, PaymentIntents, Webhooks) |
 | Email | Resend + React Email |
 | PDF | @react-pdf/renderer |
@@ -73,6 +73,10 @@ The app also has a **public-facing website** (homepage, schedule, class detail, 
 │   │   │   ├── students/
 │   │   │   ├── schedule/
 │   │   │   └── billing/
+│   │   ├── student/            # STUDENT role only (adult, self-paying)
+│   │   │   ├── dashboard/
+│   │   │   ├── schedule/
+│   │   │   └── billing/
 │   │   └── layout.tsx          # App shell with sidebar
 │   ├── api/
 │   │   ├── auth/
@@ -82,11 +86,18 @@ The app also has a **public-facing website** (homepage, schedule, class detail, 
 │   │   ├── attendance/
 │   │   ├── invoices/
 │   │   ├── payments/
+│   │   ├── register/           # Public sign-up (no session; rate limited)
+│   │   ├── portal/enrollments/ # Parent/student self-enrollment
+│   │   ├── cron/billing/       # Nightly overdue + auto-pay job
 │   │   └── webhooks/stripe/
+│   ├── login/
+│   ├── unauthorized/
 │   └── widget/                 # Embeddable iframe page
 ├── components/
 │   ├── ui/                     # shadcn/ui primitives (do not edit)
 │   ├── forms/                  # Reusable form components
+│   ├── public/                 # Public-site pieces (schedule browser, session row, motion wrappers)
+│   ├── portal/                 # Views shared by the parent and student portals
 │   ├── tables/                 # Data table components
 │   ├── charts/                 # Recharts wrappers
 │   ├── calendar/               # FullCalendar wrappers
@@ -104,7 +115,9 @@ The app also has a **public-facing website** (homepage, schedule, class detail, 
 │       ├── enrollment.ts
 │       ├── attendance.ts
 │       ├── invoices.ts
-│       └── families.ts
+│       ├── families.ts
+│       ├── public.ts           # Public site + widget queries (counts only, never student data)
+│       └── registration.ts     # Self-service account creation
 ├── types/                      # Global TypeScript types and enums
 ├── hooks/                      # Custom React hooks
 ├── prisma/
@@ -140,6 +153,7 @@ Follow these on every file, every session, without exception.
 ### Database Access
 - **All Prisma calls happen server-side only** — in Server Components, Server Actions, or API Route Handlers.
 - Never import Prisma in a client component.
+- The Prisma client caps its pool at 5 connections (`lib/prisma.ts`) because the Supabase session pooler allows 15 in total.
 - All DB access functions live in `lib/db/*.ts`. API routes call these functions; they do not contain raw Prisma queries themselves.
 - Always use `select` or `include` explicitly — avoid fetching entire models when only a subset is needed.
 
@@ -156,9 +170,17 @@ Follow these on every file, every session, without exception.
 - Form submission calls a Server Action or a `fetch` to an API route — not both.
 - Show loading state on submit button. Disable on submit. Show toast on success/error.
 
+### Public site
+- Public pages and the widget read data only through `lib/db/public.ts`. Those functions return class/session info and spot counts — never student, family or enrollment records.
+- Public pages are `force-dynamic` (set in `app/(public)/layout.tsx`) so availability is live and builds do not need the database.
+- Dates on public pages are formatted in the studio timezone with the helpers in `lib/schedule-format.ts`.
+- `/api/register` only ever creates PARENT or STUDENT accounts; the role is decided on the server.
+- Role → landing page mapping lives in `lib/portal.ts` (`portalHome`).
+
 ### Components
 - Server Components by default. Add `"use client"` only when needed (event handlers, hooks, browser APIs).
-- shadcn/ui components are in `components/ui/` — do not modify them directly. Wrap them if customization is needed.
+- shadcn/ui components are in `components/ui/` — do not modify them directly. Wrap them if customization is needed. (Exception already made: `Input` and `Textarea` use `forwardRef`, because on React 18 react-hook-form's `register()` needs the ref.)
+- For navigation that looks like a button use `components/link-button.tsx` (`LinkButton`), not `<Button render={<Link />}>`, so it stays a real link for screen readers.
 - All data tables must have pagination, search, and at least one filter. Use TanStack Table.
 
 ### Auth & Permissions
@@ -304,8 +326,10 @@ Update this section as phases are completed.
 - [x] **Phase 6** — Pricing rules, invoice generation engine, scholarship system, PDF invoices
 - [x] **Phase 7** — Stripe integration, parent payment portal, auto-pay, webhooks
 - [x] **Phase 8** — Financial P&L dashboard, admin stats, utilization reports, CSV export
-- [ ] **Phase 9** — Public website (homepage, schedule, class detail, registration flow)
-- [ ] **Phase 10** — Embeddable widget, QA, accessibility, production deploy
+- [x] **Phase 9** — Public website (homepage, schedule, class detail, registration flow), plus the student portal
+- [ ] **Phase 10** — Embeddable widget (built: `/widget`), QA, accessibility, production deploy (not done)
+
+Still open across phases: Stripe and Resend have only been run with placeholder keys (card payments, auto-pay charges, webhooks and email delivery are untested end to end); Sentry is not installed; sign-up has no email verification or password reset.
 
 ---
 

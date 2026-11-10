@@ -24,6 +24,10 @@ export default withAuth(
       return NextResponse.redirect(new URL("/unauthorized", req.url));
     }
 
+    if (pathname.startsWith("/student") && !["SUPER_ADMIN", "ADMIN", "STUDENT"].includes(role)) {
+      return NextResponse.redirect(new URL("/unauthorized", req.url));
+    }
+
     return NextResponse.next();
   },
   {
@@ -34,5 +38,5 @@ export default withAuth(
 );
 
 export const config = {
-  matcher: ["/admin/:path*", "/teacher/:path*", "/parent/:path*"],
+  matcher: ["/admin/:path*", "/teacher/:path*", "/parent/:path*", "/student/:path*"],
 };
