@@ -206,7 +206,7 @@ export default function FamiliesPage() {
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => router.push(`/admin/families/${family.id}`)}
-                title="View"
+                title="View" aria-label={`View ${family.name}`}
               >
                 <Eye />
               </Button>
@@ -214,7 +214,7 @@ export default function FamiliesPage() {
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => openEditDialog(family)}
-                title="Edit"
+                title="Edit" aria-label={`Edit ${family.name}`}
               >
                 <Pencil />
               </Button>
@@ -222,7 +222,7 @@ export default function FamiliesPage() {
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => openDeleteDialog(family)}
-                title="Delete"
+                title="Delete" aria-label={`Delete ${family.name}`}
               >
                 <Trash2 />
               </Button>

@@ -60,7 +60,7 @@ export default async function HomePage() {
         <h2 id="classes-heading" className="text-2xl font-bold tracking-tight">
           Our classes
         </h2>
-        <p className="mt-1 text-muted-foreground">Tuition is per class, per billing period.</p>
+        <p className="mt-1 text-muted-foreground">Prices are per class.</p>
 
         {classes.length === 0 ? (
           <p className="mt-8 rounded-2xl bg-white p-8 text-center text-muted-foreground shadow-sm">

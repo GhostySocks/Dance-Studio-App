@@ -87,6 +87,8 @@ The app also has a **public-facing website** (homepage, schedule, class detail, 
 │   │   ├── invoices/
 │   │   ├── payments/
 │   │   ├── register/           # Public sign-up (no session; rate limited)
+│   │   ├── account/            # Forgot/reset password, email verification
+│   │   ├── studio/             # Studio settings (admin)
 │   │   ├── portal/enrollments/ # Parent/student self-enrollment
 │   │   ├── cron/billing/       # Nightly overdue + auto-pay job
 │   │   └── webhooks/stripe/
@@ -176,6 +178,20 @@ Follow these on every file, every session, without exception.
 - Dates on public pages are formatted in the studio timezone with the helpers in `lib/schedule-format.ts`.
 - `/api/register` only ever creates PARENT or STUDENT accounts; the role is decided on the server.
 - Role → landing page mapping lives in `lib/portal.ts` (`portalHome`).
+
+### Security
+- **Row-level security is enabled on every table** and the Supabase API roles (`anon`, `authenticated`) have no table privileges. The app only reaches the database through Prisma (table owner), so there are no policies. **Any migration that creates a table must also run `ALTER TABLE "X" ENABLE ROW LEVEL SECURITY;`.**
+- Password reset and email verification use single-use tokens stored hashed in `VerificationToken` (`lib/db/account.ts`). Never store or log raw tokens in production.
+- Public endpoints (`/api/register`, `/api/account/*`) are rate limited with `lib/rate-limit.ts` (in-memory, per instance).
+- Enrollment runs in a transaction that locks the session row, so capacity cannot be oversold; keep new enrollment paths going through `enrollStudent`.
+
+### Accessibility
+- Dialogs use `components/modal.tsx` (`Modal`): labelled, Escape to close, focus trapped and restored. Do not hand-roll overlay divs.
+- Icon-only buttons need an accessible name (`aria-label` or an `sr-only` span). Form fields need a real label (`htmlFor`/`id`).
+- `--primary` is set for WCAG AA contrast with white text (4.8:1). Check contrast before changing brand colors.
+
+### Testing
+- `npm test` runs Vitest (`tests/`). Pricing, enrollment capacity/waitlist and payment settlement are covered with an in-memory Prisma stand-in; update or add tests whenever that logic changes.
 
 ### Components
 - Server Components by default. Add `"use client"` only when needed (event handlers, hooks, browser APIs).
@@ -327,9 +343,9 @@ Update this section as phases are completed.
 - [x] **Phase 7** — Stripe integration, parent payment portal, auto-pay, webhooks
 - [x] **Phase 8** — Financial P&L dashboard, admin stats, utilization reports, CSV export
 - [x] **Phase 9** — Public website (homepage, schedule, class detail, registration flow), plus the student portal
-- [ ] **Phase 10** — Embeddable widget (built: `/widget`), QA, accessibility, production deploy (not done)
+- [ ] **Phase 10** — Embeddable widget (built: `/widget`), QA and accessibility pass (done), production deploy (not done)
 
-Still open across phases: Stripe and Resend have only been run with placeholder keys (card payments, auto-pay charges, webhooks and email delivery are untested end to end); Sentry is not installed; sign-up has no email verification or password reset.
+Still open across phases: Stripe and Resend have only been run with placeholder keys (card payments, auto-pay charges, webhooks and email delivery are untested end to end); Sentry is not installed. Note that prices are charged per enrollment and an enrollment is for one ClassSession, so `basePriceCents` is effectively a per-class price.
 
 ---
 
@@ -360,6 +376,12 @@ npx prisma db seed
 
 # Open Prisma Studio (DB browser)
 npx prisma studio
+
+# Run the test suite
+npm test
+
+# Add upcoming weekly sessions for every active class (non-destructive)
+npm run db:schedule
 
 # Type check
 npx tsc --noEmit

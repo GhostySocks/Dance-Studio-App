@@ -6,8 +6,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ColumnDef } from "@tanstack/react-table";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Loader2, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 
+import { Modal } from "@/components/modal";
 import { PageHeader } from "@/components/page-header";
 import { SearchInput } from "@/components/search-input";
 import { DataTable } from "@/components/data-table";
@@ -24,46 +25,6 @@ interface Room {
   name: string;
   description: string | null;
   capacity: number;
-}
-
-function Modal({
-  open,
-  onClose,
-  title,
-  description,
-  children,
-  className,
-}: {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      <div
-        className={`relative z-50 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-background p-6 shadow-lg ${className ?? ""}`}
-      >
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
-        >
-          <X className="h-4 w-4" />
-        </button>
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold">{title}</h2>
-          {description && (
-            <p className="text-sm text-muted-foreground mt-1">{description}</p>
-          )}
-        </div>
-        {children}
-      </div>
-    </div>
-  );
 }
 
 export default function RoomsPage() {
@@ -214,14 +175,16 @@ export default function RoomsPage() {
               size="sm"
               onClick={() => openEditDialog(row.original)}
             >
-              <Pencil className="h-4 w-4" />
+              <Pencil className="h-4 w-4" aria-hidden />
+              <span className="sr-only">Edit</span>
             </Button>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setDeleteConfirmId(row.original.id)}
             >
-              <Trash2 className="h-4 w-4 text-destructive" />
+              <Trash2 className="h-4 w-4 text-destructive" aria-hidden />
+              <span className="sr-only">Delete</span>
             </Button>
           </div>
         ),

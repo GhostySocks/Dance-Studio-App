@@ -5,13 +5,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Plus, Loader2, X, Clock, MapPin, User, Users } from "lucide-react";
+import { Plus, Loader2, Clock, MapPin, User, Users } from "lucide-react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import type { EventClickArg, DatesSetArg } from "@fullcalendar/core";
 
+import { Modal } from "@/components/modal";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,46 +80,6 @@ function getStyleColor(style: string | null): string {
     Lyrical: "#f43f5e",
   };
   return colors[style ?? ""] ?? "#6b7280";
-}
-
-function Modal({
-  open,
-  onClose,
-  title,
-  description,
-  children,
-  className,
-}: {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      <div
-        className={`relative z-50 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-background p-6 shadow-lg ${className ?? ""}`}
-      >
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
-        >
-          <X className="h-4 w-4" />
-        </button>
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold">{title}</h2>
-          {description && (
-            <p className="text-sm text-muted-foreground mt-1">{description}</p>
-          )}
-        </div>
-        {children}
-      </div>
-    </div>
-  );
 }
 
 export default function SchedulePage() {

@@ -130,3 +130,52 @@ export async function getExistingEnrollments(studentIds: string[], sessionId: st
     select: { studentId: true, status: true },
   });
 }
+
+/**
+ * Adds a child to a parent's own account. The child joins the guardian's family
+ * group (creating one if the guardian has none) so family pricing applies.
+ * Returns null if the user has no guardian profile.
+ */
+export async function addChildForGuardian(
+  userId: string,
+  child: { firstName: string; lastName: string; dateOfBirth: string }
+) {
+  const guardian = await prisma.guardian.findUnique({
+    where: { userId },
+    select: { id: true, familyGroups: { select: { familyGroupId: true }, take: 1 } },
+  });
+  if (!guardian) return null;
+
+  return prisma.$transaction(async (tx) => {
+    const familyGroupId =
+      guardian.familyGroups[0]?.familyGroupId ??
+      (
+        await tx.familyGroup.create({
+          data: {
+            name: `${child.lastName} Family`,
+            guardians: { create: { guardianId: guardian.id } },
+          },
+          select: { id: true },
+        })
+      ).id;
+
+    const student = await tx.student.create({
+      data: {
+        firstName: child.firstName,
+        lastName: child.lastName,
+        dateOfBirth: toDate(child.dateOfBirth),
+        guardianId: guardian.id,
+        familyGroupId,
+      },
+      select: { id: true, firstName: true, lastName: true },
+    });
+    await tx.auditLog.create({
+      data: { actorId: userId, action: "STUDENT_ADDED_BY_GUARDIAN", entityType: "Student", entityId: student.id },
+    });
+    return student;
+  });
+}
+
+export async function countGuardianStudents(userId: string) {
+  return prisma.student.count({ where: { guardian: { userId } } });
+}

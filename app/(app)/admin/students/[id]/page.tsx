@@ -24,6 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { Modal } from "@/components/modal";
 import { StyledSelect } from "@/components/styled-select";
 
 interface Enrollment {
@@ -484,20 +485,13 @@ export default function StudentDetailPage() {
       </div>
 
       {/* Enroll Modal */}
-      {enrollOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setEnrollOpen(false)} />
-          <div className="relative z-50 w-full max-w-lg rounded-xl bg-background p-6 shadow-lg">
-            <button
-              onClick={() => setEnrollOpen(false)}
-              className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-            </button>
-            <h2 className="text-lg font-semibold mb-1">Enroll in Class</h2>
-            <p className="text-sm text-muted-foreground mb-4">
-              Select a class session to enroll {student.firstName} in.
-            </p>
+      <Modal
+        open={enrollOpen}
+        onClose={() => setEnrollOpen(false)}
+        title="Enroll in Class"
+        description={`Select a class session to enroll ${student.firstName} in.`}
+        className="max-w-lg"
+      >
             <div className="grid gap-4">
               <StyledSelect
                 value={selectedSessionId}
@@ -522,9 +516,7 @@ export default function StudentDetailPage() {
                 </Button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

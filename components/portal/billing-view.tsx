@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { CreditCard, Loader2, X, FileDown, RefreshCw } from "lucide-react";
+import { CreditCard, Loader2, FileDown, RefreshCw } from "lucide-react";
 
+import { Modal } from "@/components/modal";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -67,39 +68,6 @@ function invoiceStatusVariant(
     default:
       return "outline";
   }
-}
-
-function Modal({
-  open,
-  onClose,
-  title,
-  children,
-  className,
-}: {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      <div
-        className={`relative z-50 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-background p-6 shadow-lg ${className ?? ""}`}
-      >
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
-        >
-          <X className="h-4 w-4" />
-        </button>
-        <h2 className="text-lg font-semibold mb-4">{title}</h2>
-        {children}
-      </div>
-    </div>
-  );
 }
 
 export function BillingView() {

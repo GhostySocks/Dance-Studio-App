@@ -9,7 +9,7 @@ import {
   createStudentAccount,
   isEmailRegistered,
 } from "@/lib/db/registration";
-import { sendEnrollmentConfirmation } from "@/lib/email";
+import { sendEnrollmentConfirmation, sendVerificationEmail } from "@/lib/email";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { registrationSchema } from "@/lib/validations/registration";
 
@@ -63,6 +63,8 @@ export async function POST(req: NextRequest) {
       }
       throw error;
     }
+
+    await sendVerificationEmail(data.email);
 
     // Enroll in the class picked on the way in. The account already exists, so a
     // failure here is reported rather than failing the whole sign-up.

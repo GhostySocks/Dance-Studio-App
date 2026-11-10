@@ -4,6 +4,8 @@ import type { ReactElement } from "react";
 import EnrollmentConfirmationEmail from "@/emails/enrollment-confirmation";
 import InvoiceEmail, { type InvoiceEmailProps } from "@/emails/invoice";
 import AdminNoticeEmail from "@/emails/admin-notice";
+import AccountLinkEmail, { type AccountLinkEmailProps } from "@/emails/account-link";
+import { createAccountToken } from "@/lib/db/account";
 import {
   getAdminEmails,
   getEnrollmentEmailContext,
@@ -146,6 +148,64 @@ export async function sendAdminNotice(heading: string, message: string) {
     });
   } catch (error) {
     console.error("sendAdminNotice failed:", error);
+    return { sent: false };
+  }
+}
+
+function appUrl(path: string): string {
+  const base = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "";
+  return `${base.replace(/\/$/, "")}${path}`;
+}
+
+const RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
+const VERIFY_TTL_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
+
+/**
+ * Sends an account link. With no email provider configured in development, the link
+ * is printed to the server log instead so the flow can still be exercised.
+ */
+async function sendAccountLink(to: string, subject: string, props: Omit<AccountLinkEmailProps, "studioName">) {
+  const studio = await getStudioInfo();
+  const result = await sendEmail({
+    to: [to],
+    subject: `${subject} — ${studio.name}`,
+    react: AccountLinkEmail({ studioName: studio.name, ...props }),
+  });
+  if (!result.sent && process.env.NODE_ENV !== "production") {
+    console.info(`[dev] Email not sent. ${subject} link: ${props.url}`);
+  }
+  return result;
+}
+
+export async function sendPasswordResetEmail(email: string) {
+  try {
+    const token = await createAccountToken("reset", email, RESET_TTL_MS);
+    return await sendAccountLink(email, "Reset your password", {
+      heading: "Reset your password",
+      message: "We received a request to reset the password for your account.",
+      buttonLabel: "Choose a new password",
+      url: appUrl(`/reset-password?token=${token}`),
+      footnote:
+        "This link works once and expires in 1 hour. If you did not ask for it, you can ignore this email and your password will stay the same.",
+    });
+  } catch (error) {
+    console.error("sendPasswordResetEmail failed:", error);
+    return { sent: false };
+  }
+}
+
+export async function sendVerificationEmail(email: string) {
+  try {
+    const token = await createAccountToken("verify", email, VERIFY_TTL_MS);
+    return await sendAccountLink(email, "Confirm your email address", {
+      heading: "Confirm your email address",
+      message: "Please confirm this is your email address so we can send you invoices and class updates.",
+      buttonLabel: "Confirm email",
+      url: appUrl(`/verify-email?token=${token}`),
+      footnote: "This link expires in 3 days. If you did not create an account, you can ignore this email.",
+    });
+  } catch (error) {
+    console.error("sendVerificationEmail failed:", error);
     return { sent: false };
   }
 }

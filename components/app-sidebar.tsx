@@ -18,6 +18,7 @@ import {
   PanelLeftClose,
   PanelLeft,
   UserCheck,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,7 @@ const adminNav: NavItem[] = [
   { title: "Billing", href: "/admin/billing", icon: Receipt },
   { title: "Scholarships", href: "/admin/scholarships", icon: Award },
   { title: "Reports", href: "/admin/reports", icon: BarChart3 },
+  { title: "Settings", href: "/admin/settings", icon: Settings },
 ];
 
 const teacherNav: NavItem[] = [
@@ -120,7 +122,7 @@ export function AppSidebar({
             {nav.label}
           </p>
         )}
-        <nav className="space-y-0.5 px-2">
+        <nav aria-label={nav.label} className="space-y-0.5 px-2">
           {nav.items.map((item) => {
             const isActive =
               pathname === item.href ||
@@ -137,8 +139,10 @@ export function AppSidebar({
                   collapsed && "justify-center px-2"
                 )}
                 title={collapsed ? item.title : undefined}
+                aria-label={collapsed ? item.title : undefined}
+                aria-current={isActive ? "page" : undefined}
               >
-                <item.icon className="h-[18px] w-[18px] shrink-0" />
+                <item.icon aria-hidden className="h-[18px] w-[18px] shrink-0" />
                 {!collapsed && <span>{item.title}</span>}
               </Link>
             );
@@ -152,6 +156,8 @@ export function AppSidebar({
           size="sm"
           className="w-full justify-center rounded-xl hover:bg-accent"
           onClick={onToggle}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!collapsed}
         >
           {collapsed ? (
             <PanelLeft className="h-4 w-4" />

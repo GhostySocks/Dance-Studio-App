@@ -48,7 +48,10 @@ export function UserNav({ user }: UserNavProps) {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="relative flex h-9 w-9 items-center justify-center rounded-full hover:bg-accent">
+      <DropdownMenuTrigger
+        aria-label={`Account menu for ${user.name}`}
+        className="relative flex h-9 w-9 items-center justify-center rounded-full hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
         <Avatar className="h-9 w-9">
           <AvatarImage src={user.image ?? undefined} alt={user.name} />
           <AvatarFallback>{initials}</AvatarFallback>

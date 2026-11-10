@@ -5,6 +5,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { toast } from "sonner";
 import { Plus, Loader2, X, UserPlus, AlertTriangle } from "lucide-react";
 
+import { Modal } from "@/components/modal";
 import { PageHeader } from "@/components/page-header";
 import { SearchInput } from "@/components/search-input";
 import { DataTable } from "@/components/data-table";
@@ -50,46 +51,6 @@ interface Student {
   id: string;
   firstName: string;
   lastName: string;
-}
-
-function Modal({
-  open,
-  onClose,
-  title,
-  description,
-  children,
-  className,
-}: {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      <div
-        className={`relative z-50 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-background p-6 shadow-lg ${className ?? ""}`}
-      >
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
-        >
-          <X className="h-4 w-4" />
-        </button>
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold">{title}</h2>
-          {description && (
-            <p className="text-sm text-muted-foreground mt-1">{description}</p>
-          )}
-        </div>
-        {children}
-      </div>
-    </div>
-  );
 }
 
 function statusVariant(status: string): "default" | "secondary" | "destructive" | "outline" {

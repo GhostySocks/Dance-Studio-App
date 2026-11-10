@@ -201,8 +201,9 @@ export default function ReportsPage() {
               />
             </div>
             <div className="grid gap-1">
-              <Label className="text-xs">Start Date</Label>
+              <Label htmlFor="report-start" className="text-xs">Start Date</Label>
               <input
+                id="report-start"
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
@@ -210,8 +211,9 @@ export default function ReportsPage() {
               />
             </div>
             <div className="grid gap-1">
-              <Label className="text-xs">End Date</Label>
+              <Label htmlFor="report-end" className="text-xs">End Date</Label>
               <input
+                id="report-end"
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}

@@ -50,7 +50,7 @@ export default async function ClassDetailPage({ params }: { params: { id: string
           <div>
             <dt className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <Tag className="h-3.5 w-3.5" aria-hidden />
-              Tuition
+              Price per class
             </dt>
             <dd className="text-lg font-semibold">{formatCurrency(cls.basePriceCents)}</dd>
           </div>

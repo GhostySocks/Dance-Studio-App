@@ -87,61 +87,67 @@ export async function enrollStudent({
   waitlist?: boolean;
   error?: string;
 }> {
-  // Check if already enrolled
-  const existing = await prisma.enrollment.findUnique({
-    where: { studentId_sessionId: { studentId, sessionId } },
-  });
+  // Lock the session row so two people cannot take the last spot at the same time
+  return prisma.$transaction(async (tx) => {
+    const locked = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "ClassSession" WHERE id = ${sessionId} FOR UPDATE`;
+    if (locked.length === 0) return { success: false, error: "Session not found" };
 
-  if (existing) {
-    if (existing.status === "ACTIVE") {
-      return { success: false, error: "Student is already enrolled in this session" };
+    // Check if already enrolled
+    const existing = await tx.enrollment.findUnique({
+      where: { studentId_sessionId: { studentId, sessionId } },
+    });
+
+    if (existing) {
+      if (existing.status === "ACTIVE") {
+        return { success: false, error: "Student is already enrolled in this session" };
+      }
+      if (existing.status === "WAITLIST") {
+        return { success: false, error: "Student is already on the waitlist for this session" };
+      }
+      // Re-enroll a cancelled student
+      const session = await tx.classSession.findUnique({
+        where: { id: sessionId },
+        select: { maxCapacity: true },
+      });
+      if (!session) return { success: false, error: "Session not found" };
+
+      const activeCount = await tx.enrollment.count({
+        where: { sessionId, status: "ACTIVE" },
+      });
+
+      const newStatus = activeCount >= session.maxCapacity && !force ? "WAITLIST" : "ACTIVE";
+      const enrollment = await tx.enrollment.update({
+        where: { id: existing.id },
+        data: { status: newStatus },
+      });
+      return { success: true, enrollment, waitlist: newStatus === "WAITLIST" };
     }
-    if (existing.status === "WAITLIST") {
-      return { success: false, error: "Student is already on the waitlist for this session" };
-    }
-    // Re-enroll a cancelled student
-    const session = await prisma.classSession.findUnique({
+
+    // Fetch session capacity
+    const session = await tx.classSession.findUnique({
       where: { id: sessionId },
       select: { maxCapacity: true },
     });
+
     if (!session) return { success: false, error: "Session not found" };
 
-    const activeCount = await prisma.enrollment.count({
+    const activeCount = await tx.enrollment.count({
       where: { sessionId, status: "ACTIVE" },
     });
 
-    const newStatus = activeCount >= session.maxCapacity && !force ? "WAITLIST" : "ACTIVE";
-    const enrollment = await prisma.enrollment.update({
-      where: { id: existing.id },
-      data: { status: newStatus },
+    if (activeCount >= session.maxCapacity && !force) {
+      // Auto-waitlist
+      const enrollment = await tx.enrollment.create({
+        data: { studentId, sessionId, status: "WAITLIST" },
+      });
+      return { success: true, enrollment, waitlist: true };
+    }
+
+    const enrollment = await tx.enrollment.create({
+      data: { studentId, sessionId, status: "ACTIVE" },
     });
-    return { success: true, enrollment, waitlist: newStatus === "WAITLIST" };
-  }
-
-  // Fetch session capacity
-  const session = await prisma.classSession.findUnique({
-    where: { id: sessionId },
-    select: { maxCapacity: true },
+    return { success: true, enrollment, waitlist: false };
   });
-
-  if (!session) return { success: false, error: "Session not found" };
-
-  const activeCount = await prisma.enrollment.count({
-    where: { sessionId, status: "ACTIVE" },
-  });
-
-  if (activeCount >= session.maxCapacity && !force) {
-    // Auto-waitlist
-    const enrollment = await prisma.enrollment.create({
-      data: { studentId, sessionId, status: "WAITLIST" },
-    });
-    return { success: true, enrollment, waitlist: true };
-  }
-
-  const enrollment = await prisma.enrollment.create({
-    data: { studentId, sessionId, status: "ACTIVE" },
-  });
-  return { success: true, enrollment, waitlist: false };
 }
 
 export async function bulkEnrollStudents({

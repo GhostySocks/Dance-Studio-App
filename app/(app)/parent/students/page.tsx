@@ -1,10 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/page-header";
+import { AddChildForm } from "@/components/forms/add-child-form";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/link-button";
 import {
   Card,
   CardContent,
@@ -34,22 +38,24 @@ interface StudentData {
 export default function ParentStudentsPage() {
   const [students, setStudents] = useState<StudentData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+
+  const fetchStudents = useCallback(async () => {
+    try {
+      const res = await fetch("/api/parent/students");
+      if (!res.ok) throw new Error("Failed");
+      const json = await res.json();
+      setStudents(json.data || []);
+    } catch {
+      toast.error("Failed to load students");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    async function fetchStudents() {
-      try {
-        const res = await fetch("/api/parent/students");
-        if (!res.ok) throw new Error("Failed");
-        const json = await res.json();
-        setStudents(json.data || []);
-      } catch {
-        toast.error("Failed to load students");
-      } finally {
-        setLoading(false);
-      }
-    }
     fetchStudents();
-  }, []);
+  }, [fetchStudents]);
 
   if (loading) {
     return (
@@ -64,12 +70,41 @@ export default function ParentStudentsPage() {
       <PageHeader
         title="My Students"
         description="View your children and their class enrollments"
-      />
+      >
+        <LinkButton href="/schedule" variant="outline">
+          Enroll in a class
+        </LinkButton>
+        {!adding && (
+          <Button onClick={() => setAdding(true)}>
+            <Plus className="h-4 w-4" aria-hidden />
+            Add a child
+          </Button>
+        )}
+      </PageHeader>
+
+      {adding && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Add a child</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AddChildForm
+              onCancel={() => setAdding(false)}
+              onAdded={() => {
+                setAdding(false);
+                fetchStudents();
+              }}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {students.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center">
-            <p className="text-muted-foreground">No students linked to your account.</p>
+            <p className="text-muted-foreground">
+              No children on your account yet. Use &ldquo;Add a child&rdquo; to get started.
+            </p>
           </CardContent>
         </Card>
       ) : (

@@ -1,6 +1,8 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
+import { ensureUpcomingSessions, zonedTime } from "./schedule";
+
 const prisma = new PrismaClient();
 
 async function main() {
@@ -328,15 +330,15 @@ async function main() {
     )
   );
 
+  // Class times are wall-clock times in the studio timezone
   function sessionDate(dayOffset: number, hour: number, minute: number): Date {
-    return new Date(
-      Date.UTC(
-        nextMonday.getUTCFullYear(),
-        nextMonday.getUTCMonth(),
-        nextMonday.getUTCDate() + dayOffset,
-        hour,
-        minute
-      )
+    return zonedTime(
+      "America/New_York",
+      nextMonday.getUTCFullYear(),
+      nextMonday.getUTCMonth(),
+      nextMonday.getUTCDate() + dayOffset,
+      hour,
+      minute
     );
   }
 
@@ -425,6 +427,10 @@ async function main() {
 
   console.log("Created 8 enrollments");
 
+  // Repeat each class weekly so the public schedule has something to show
+  const extraSessions = await ensureUpcomingSessions(prisma, 8);
+  console.log(`Created ${extraSessions} more weekly sessions`);
+
   // ─── Pricing Rule (Global) ─────────────────────────────────────────────────
   await prisma.pricingRule.create({
     data: {
@@ -466,7 +472,7 @@ async function main() {
   console.log("Students:        5");
   console.log("Rooms:           3");
   console.log("Class Templates: 6");
-  console.log("Class Sessions:  6");
+  console.log(`Class Sessions:  ${6 + extraSessions}`);
   console.log("Enrollments:     8");
   console.log("Pricing Rules:   1");
   console.log("Scholarships:    1");

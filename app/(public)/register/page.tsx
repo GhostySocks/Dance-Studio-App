@@ -43,7 +43,7 @@ function SelectedClass({ session, timeZone }: { session: PublicSession; timeZone
       </div>
       <p className="mt-3 text-sm">
         <span className="font-semibold">{formatCurrency(session.template.basePriceCents)}</span>
-        <span className="text-muted-foreground"> tuition · {spotsLabel(session.spotsLeft)}</span>
+        <span className="text-muted-foreground"> per class · {spotsLabel(session.spotsLeft)}</span>
       </p>
       {session.spotsLeft <= 0 && (
         <p className="mt-2 text-sm text-domain-alert-foreground">
@@ -102,9 +102,14 @@ export default async function RegisterPage({
     );
     body =
       students.length === 0 ? (
-        <p className="text-muted-foreground">
-          There are no dancers on your account yet. Please contact the studio to add one.
-        </p>
+        <div className="space-y-4">
+          <p className="text-muted-foreground">
+            There are no dancers on your account yet. Add a child first, then come back to enroll.
+          </p>
+          <LinkButton href="/parent/students" className="h-10 px-5">
+            Add a child
+          </LinkButton>
+        </div>
       ) : (
         <PortalEnrollForm
           sessionId={selected.id}
