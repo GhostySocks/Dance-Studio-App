@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 
 import { roomSchema, type RoomFormData } from "@/lib/validations/room";
+import { RequiredMark, RequiredNote } from "@/components/required-mark";
 
 interface Room {
   id: string;
@@ -238,10 +239,11 @@ export default function RoomsPage() {
         }
       >
         <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4">
+          <RequiredNote />
           <div className="grid gap-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name">Name<RequiredMark /></Label>
             <Input
-              id="name"
+              id="name" aria-required="true"
               {...form.register("name")}
               aria-invalid={!!form.formState.errors.name}
             />
@@ -262,9 +264,9 @@ export default function RoomsPage() {
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="capacity">Capacity</Label>
+            <Label htmlFor="capacity">Capacity<RequiredMark /></Label>
             <Input
-              id="capacity"
+              id="capacity" aria-required="true"
               type="number"
               min={1}
               {...form.register("capacity")}

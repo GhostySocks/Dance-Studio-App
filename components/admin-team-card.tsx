@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { newAdminSchema, type NewAdminFormData } from "@/lib/validations/staff";
+import { RequiredMark, RequiredNote } from "@/components/required-mark";
 
 interface Admin {
   id: string;
@@ -63,10 +64,11 @@ function NewAdminForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+      <RequiredNote />
       <div className="space-y-2">
-        <Label htmlFor="admin-name">Full name</Label>
+        <Label htmlFor="admin-name">Full name<RequiredMark /></Label>
         <Input
-          id="admin-name"
+          id="admin-name" aria-required="true"
           autoComplete="off"
           aria-invalid={!!errors.name}
           aria-describedby={errors.name ? "admin-name-error" : undefined}
@@ -79,9 +81,9 @@ function NewAdminForm({
         )}
       </div>
       <div className="space-y-2">
-        <Label htmlFor="admin-email">Email</Label>
+        <Label htmlFor="admin-email">Email<RequiredMark /></Label>
         <Input
-          id="admin-email"
+          id="admin-email" aria-required="true"
           type="email"
           autoComplete="off"
           aria-invalid={!!errors.email}

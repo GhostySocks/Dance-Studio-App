@@ -26,6 +26,7 @@ import {
   classSessionSchema,
   type ClassSessionFormData,
 } from "@/lib/validations/class";
+import { RequiredMark, RequiredNote } from "@/components/required-mark";
 
 interface Session {
   id: string;
@@ -315,8 +316,9 @@ export default function SchedulePage() {
         description="Schedule a new class session."
       >
         <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4">
+          <RequiredNote />
           <div className="grid gap-2">
-            <Label htmlFor="templateId">Class Template</Label>
+            <Label htmlFor="templateId">Class Template<RequiredMark /></Label>
             <StyledSelect
               value={form.watch("templateId")}
               onChange={(val) => form.setValue("templateId", val)}
@@ -335,7 +337,7 @@ export default function SchedulePage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="teacherId">Teacher</Label>
+              <Label htmlFor="teacherId">Teacher<RequiredMark /></Label>
               <StyledSelect
                 value={form.watch("teacherId")}
                 onChange={(val) => form.setValue("teacherId", val)}
@@ -352,7 +354,7 @@ export default function SchedulePage() {
               )}
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="roomId">Room</Label>
+              <Label htmlFor="roomId">Room<RequiredMark /></Label>
               <StyledSelect
                 value={form.watch("roomId")}
                 onChange={(val) => form.setValue("roomId", val)}
@@ -371,9 +373,9 @@ export default function SchedulePage() {
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="sessionDate">Date</Label>
+            <Label htmlFor="sessionDate">Date<RequiredMark /></Label>
             <Input
-              id="sessionDate"
+              id="sessionDate" aria-required="true"
               type="date"
               value={sessionDate}
               onChange={(e) => setSessionDate(e.target.value)}
@@ -382,7 +384,7 @@ export default function SchedulePage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label>Start Time</Label>
+              <Label>Start Time<RequiredMark /></Label>
               <StyledSelect
                 value={startSlot}
                 onChange={setStartSlot}
@@ -397,7 +399,7 @@ export default function SchedulePage() {
               )}
             </div>
             <div className="grid gap-2">
-              <Label>End Time</Label>
+              <Label>End Time<RequiredMark /></Label>
               <StyledSelect
                 value={endSlot}
                 onChange={setEndSlot}
@@ -414,9 +416,9 @@ export default function SchedulePage() {
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="maxCapacity">Max Capacity</Label>
+            <Label htmlFor="maxCapacity">Max Capacity<RequiredMark /></Label>
             <Input
-              id="maxCapacity"
+              id="maxCapacity" aria-required="true"
               type="number"
               min={1}
               {...form.register("maxCapacity")}
@@ -452,9 +454,9 @@ export default function SchedulePage() {
 
           {isRecurring && (
             <div className="grid gap-2">
-              <Label htmlFor="weekCount">Number of Weeks</Label>
+              <Label htmlFor="weekCount">Number of Weeks<RequiredMark /></Label>
               <Input
-                id="weekCount"
+                id="weekCount" aria-required="true"
                 type="number"
                 min={1}
                 max={52}

@@ -32,6 +32,7 @@ import {
   classTemplateSchema,
   type ClassTemplateFormData,
 } from "@/lib/validations/class";
+import { RequiredMark, RequiredNote } from "@/components/required-mark";
 
 interface ClassTemplate {
   id: string;
@@ -321,10 +322,11 @@ export default function ClassesPage() {
         }
       >
         <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4">
+          <RequiredNote />
           <div className="grid gap-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name">Name<RequiredMark /></Label>
             <Input
-              id="name"
+              id="name" aria-required="true"
               {...form.register("name")}
               aria-invalid={!!form.formState.errors.name}
             />
@@ -373,9 +375,9 @@ export default function ClassesPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="defaultDurationMins">Duration (minutes)</Label>
+              <Label htmlFor="defaultDurationMins">Duration (minutes)<RequiredMark /></Label>
               <Input
-                id="defaultDurationMins"
+                id="defaultDurationMins" aria-required="true"
                 type="number"
                 min={1}
                 {...form.register("defaultDurationMins")}
@@ -388,9 +390,9 @@ export default function ClassesPage() {
               )}
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="basePriceCents">Price per class ($)</Label>
+              <Label htmlFor="basePriceCents">Price per class ($)<RequiredMark /></Label>
               <Input
-                id="basePriceCents"
+                id="basePriceCents" aria-required="true"
                 type="number"
                 min={0}
                 step="0.01"

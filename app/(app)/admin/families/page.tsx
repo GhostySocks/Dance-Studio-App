@@ -29,6 +29,7 @@ import {
   familyGroupSchema,
   type FamilyGroupFormData,
 } from "@/lib/validations/family";
+import { RequiredMark, RequiredNote } from "@/components/required-mark";
 
 interface Guardian {
   guardian: {
@@ -276,10 +277,11 @@ export default function FamiliesPage() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <RequiredNote />
             <div className="space-y-2">
-              <Label htmlFor="family-name">Family Name</Label>
+              <Label htmlFor="family-name">Family Name<RequiredMark /></Label>
               <Input
-                id="family-name"
+                id="family-name" aria-required="true"
                 placeholder="e.g. The Smith Family"
                 {...register("name")}
               />

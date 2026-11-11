@@ -22,6 +22,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { StyledSelect } from "@/components/styled-select";
 
 import { studentSchema, type StudentFormData } from "@/lib/validations/student";
+import { RequiredMark, RequiredNote } from "@/components/required-mark";
 
 interface Student {
   id: string;
@@ -358,11 +359,12 @@ export default function StudentsPage() {
         }
       >
         <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4">
+          <RequiredNote />
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="firstName">First Name</Label>
+              <Label htmlFor="firstName">First Name<RequiredMark /></Label>
               <Input
-                id="firstName"
+                id="firstName" aria-required="true"
                 {...form.register("firstName")}
                 aria-invalid={!!form.formState.errors.firstName}
               />
@@ -373,9 +375,9 @@ export default function StudentsPage() {
               )}
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="lastName">Last Name</Label>
+              <Label htmlFor="lastName">Last Name<RequiredMark /></Label>
               <Input
-                id="lastName"
+                id="lastName" aria-required="true"
                 {...form.register("lastName")}
                 aria-invalid={!!form.formState.errors.lastName}
               />

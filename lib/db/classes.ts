@@ -236,3 +236,26 @@ export async function createRecurringSessions(data: {
   }
   return prisma.classSession.createMany({ data: sessions });
 }
+
+/** Upcoming dates of one class, soonest first, with how full each is. */
+export async function getUpcomingSessionsForClass(templateId: string) {
+  const sessions = await prisma.classSession.findMany({
+    where: { templateId, startTime: { gte: new Date() } },
+    select: {
+      id: true,
+      startTime: true,
+      maxCapacity: true,
+      teacher: { select: { user: { select: { name: true } } } },
+      _count: { select: { enrollments: { where: { status: "ACTIVE" } } } },
+    },
+    orderBy: { startTime: "asc" },
+    take: 200,
+  });
+  return sessions.map((s) => ({
+    id: s.id,
+    startTime: s.startTime,
+    maxCapacity: s.maxCapacity,
+    enrolled: s._count.enrollments,
+    teacherName: s.teacher.user.name,
+  }));
+}

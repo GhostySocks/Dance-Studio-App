@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { dayIn } from "@/lib/timezone";
 import { termSchema, type TermFormData } from "@/lib/validations/term";
+import { RequiredMark, RequiredNote } from "@/components/required-mark";
 
 interface Season {
   id: string;
@@ -100,10 +101,11 @@ function RangeForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+      <RequiredNote />
       <div className="space-y-2">
-        <Label htmlFor="range-name">Name</Label>
+        <Label htmlFor="range-name">Name<RequiredMark /></Label>
         <Input
-          id="range-name"
+          id="range-name" aria-required="true"
           placeholder={kind === "term" ? "Fall 2026" : "2026–27 Season"}
           aria-invalid={!!errors.name}
           aria-describedby={errors.name ? "range-name-error" : undefined}
@@ -117,9 +119,9 @@ function RangeForm({
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="range-start">First day</Label>
+          <Label htmlFor="range-start">First day<RequiredMark /></Label>
           <Input
-            id="range-start"
+            id="range-start" aria-required="true"
             type="date"
             aria-invalid={!!errors.startDate}
             aria-describedby={errors.startDate ? "range-start-error" : undefined}
@@ -132,9 +134,9 @@ function RangeForm({
           )}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="range-end">Last day</Label>
+          <Label htmlFor="range-end">Last day<RequiredMark /></Label>
           <Input
-            id="range-end"
+            id="range-end" aria-required="true"
             type="date"
             aria-invalid={!!errors.endDate}
             aria-describedby={errors.endDate ? "range-end-error" : undefined}

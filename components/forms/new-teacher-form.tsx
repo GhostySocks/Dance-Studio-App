@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { newTeacherSchema, type NewTeacherFormData } from "@/lib/validations/staff";
+import { RequiredMark, RequiredNote } from "@/components/required-mark";
 
 /** Admin adds a teacher. The teacher sets their own password through an emailed link. */
 export function NewTeacherForm({
@@ -53,11 +54,12 @@ export function NewTeacherForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+      <RequiredNote />
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="teacher-name">Full name</Label>
+          <Label htmlFor="teacher-name">Full name<RequiredMark /></Label>
           <Input
-            id="teacher-name"
+            id="teacher-name" aria-required="true"
             autoComplete="off"
             aria-invalid={!!errors.name}
             aria-describedby={errors.name ? "teacher-name-error" : undefined}
@@ -66,9 +68,9 @@ export function NewTeacherForm({
           {error("teacher-name", errors.name?.message)}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="teacher-email">Email</Label>
+          <Label htmlFor="teacher-email">Email<RequiredMark /></Label>
           <Input
-            id="teacher-email"
+            id="teacher-email" aria-required="true"
             type="email"
             autoComplete="off"
             aria-invalid={!!errors.email}

@@ -28,6 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { RequiredMark } from "@/components/required-mark";
 
 interface Session {
   id: string;
@@ -256,9 +257,10 @@ export default function AdminTeacherDetailPage() {
             <Label htmlFor="reassign-to">
               Who takes over their {teacher.upcomingCount} upcoming class
               {teacher.upcomingCount === 1 ? "" : "es"}?
+              <RequiredMark />
             </Label>
             <select
-              id="reassign-to"
+              id="reassign-to" aria-required="true"
               value={reassignTo}
               onChange={(e) => setReassignTo(e.target.value)}
               aria-describedby="reassign-to-hint"

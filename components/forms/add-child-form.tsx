@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { childSchema, type ChildFormData } from "@/lib/validations/account";
+import { RequiredMark, RequiredNote } from "@/components/required-mark";
 
 /** Lets a parent add another child to their own family. */
 export function AddChildForm({ onAdded, onCancel }: { onAdded: () => void; onCancel: () => void }) {
@@ -39,11 +40,12 @@ export function AddChildForm({ onAdded, onCancel }: { onAdded: () => void; onCan
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+      <RequiredNote />
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-2">
-          <Label htmlFor="child-first">First name</Label>
+          <Label htmlFor="child-first">First name<RequiredMark /></Label>
           <Input
-            id="child-first"
+            id="child-first" aria-required="true"
             autoFocus
             aria-invalid={!!errors.firstName}
             aria-describedby={errors.firstName ? "child-first-error" : undefined}
@@ -56,9 +58,9 @@ export function AddChildForm({ onAdded, onCancel }: { onAdded: () => void; onCan
           )}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="child-last">Last name</Label>
+          <Label htmlFor="child-last">Last name<RequiredMark /></Label>
           <Input
-            id="child-last"
+            id="child-last" aria-required="true"
             aria-invalid={!!errors.lastName}
             aria-describedby={errors.lastName ? "child-last-error" : undefined}
             {...register("lastName")}

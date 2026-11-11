@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { StyledSelect } from "@/components/styled-select";
+import { RequiredMark, RequiredNote } from "@/components/required-mark";
 
 interface ScholarshipRow {
   id: string;
@@ -422,13 +423,14 @@ export default function ScholarshipsPage() {
         title={editingSch ? "Edit Scholarship" : "Add Scholarship"}
       >
         <div className="grid gap-4">
+          <RequiredNote />
           <div className="grid gap-2">
-            <Label>Name</Label>
+            <Label>Name<RequiredMark /></Label>
             <Input value={schName} onChange={(e) => setSchName(e.target.value)} placeholder="e.g. Merit Scholarship" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label>Type</Label>
+              <Label>Type<RequiredMark /></Label>
               <StyledSelect
                 value={schType}
                 onChange={(value) => setSchType(value as "PERCENT" | "FIXED" | "WAIVER")}
@@ -440,7 +442,10 @@ export default function ScholarshipsPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label>{schType === "PERCENT" ? "Percentage" : schType === "FIXED" ? "Amount (cents)" : "Value"}</Label>
+              <Label>
+              {schType === "PERCENT" ? "Percentage" : schType === "FIXED" ? "Amount (cents)" : "Value"}
+              <RequiredMark />
+            </Label>
               <Input
                 type="number"
                 value={schValue}
@@ -452,7 +457,7 @@ export default function ScholarshipsPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label>Apply To</Label>
+              <Label>Apply To<RequiredMark /></Label>
               <StyledSelect
                 value={schTarget}
                 onChange={(value) => {
@@ -466,7 +471,10 @@ export default function ScholarshipsPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label>{schTarget === "student" ? "Student" : "Family"}</Label>
+              <Label>
+              {schTarget === "student" ? "Student" : "Family"}
+              <RequiredMark />
+            </Label>
               <StyledSelect
                 value={schTargetId}
                 onChange={(value) => setSchTargetId(value)}
@@ -481,7 +489,7 @@ export default function ScholarshipsPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label>Start Date</Label>
+              <Label>Start Date<RequiredMark /></Label>
               <input
                 type="date"
                 value={schStartDate}
@@ -516,13 +524,14 @@ export default function ScholarshipsPage() {
         title={editingRule ? "Edit Pricing Rule" : "Add Pricing Rule"}
       >
         <div className="grid gap-4">
+          <RequiredNote />
           <div className="grid gap-2">
-            <Label>Name</Label>
+            <Label>Name<RequiredMark /></Label>
             <Input value={ruleName} onChange={(e) => setRuleName(e.target.value)} placeholder="e.g. Sibling Discount" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label>Discount Type</Label>
+              <Label>Discount Type<RequiredMark /></Label>
               <StyledSelect
                 value={ruleDiscountType}
                 onChange={(value) => setRuleDiscountType(value as "PERCENT_OFF" | "FIXED_PRICE" | "FAMILY_CAP")}
@@ -536,6 +545,7 @@ export default function ScholarshipsPage() {
             <div className="grid gap-2">
               <Label>
                 {ruleDiscountType === "PERCENT_OFF" ? "Percentage" : "Amount (cents)"}
+                <RequiredMark />
               </Label>
               <Input
                 type="number"
@@ -546,7 +556,7 @@ export default function ScholarshipsPage() {
             </div>
           </div>
           <div className="grid gap-2">
-            <Label>Trigger at enrollment #</Label>
+            <Label>Trigger at enrollment #<RequiredMark /></Label>
             <Input
               type="number"
               min={2}
@@ -566,7 +576,7 @@ export default function ScholarshipsPage() {
           </label>
           {!ruleGlobal && (
             <div className="grid gap-2">
-              <Label>Family Group</Label>
+              <Label>Family Group<RequiredMark /></Label>
               <StyledSelect
                 value={ruleFamilyId}
                 onChange={(value) => setRuleFamilyId(value)}

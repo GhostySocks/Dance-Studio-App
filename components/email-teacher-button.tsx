@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { teacherMessageFormSchema, type TeacherMessageFormData } from "@/lib/validations/teacher-message";
+import { RequiredMark, RequiredNote } from "@/components/required-mark";
 
 function MessageForm({
   teacherId,
@@ -51,10 +52,11 @@ function MessageForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+      <RequiredNote />
       <div className="space-y-2">
-        <Label htmlFor="teacher-message-subject">Subject</Label>
+        <Label htmlFor="teacher-message-subject">Subject<RequiredMark /></Label>
         <Input
-          id="teacher-message-subject"
+          id="teacher-message-subject" aria-required="true"
           aria-invalid={!!errors.subject}
           aria-describedby={errors.subject ? "teacher-message-subject-error" : undefined}
           {...register("subject")}
@@ -66,9 +68,9 @@ function MessageForm({
         )}
       </div>
       <div className="space-y-2">
-        <Label htmlFor="teacher-message-body">Message</Label>
+        <Label htmlFor="teacher-message-body">Message<RequiredMark /></Label>
         <Textarea
-          id="teacher-message-body"
+          id="teacher-message-body" aria-required="true"
           rows={6}
           autoFocus
           aria-invalid={!!errors.message}

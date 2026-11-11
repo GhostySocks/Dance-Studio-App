@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PLAN_LABELS, PLAN_UNITS, TERM_PLANS, type BillingPlan } from "@/lib/registration-billing";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { RequiredMark, RequiredNote } from "@/components/required-mark";
 
 interface Registration {
   id: string;
@@ -162,9 +163,13 @@ function NewRegistrationForm({ onDone, onCancel }: { onDone: () => void; onCance
     emptyLabel: string
   ) => (
     <div className="space-y-2">
-      <Label htmlFor={`reg-${name}`}>{label}</Label>
+      <Label htmlFor={`reg-${name}`}>
+        {label}
+        <RequiredMark />
+      </Label>
       <select
         id={`reg-${name}`}
+        aria-required="true"
         className={selectClass}
         aria-invalid={!!errors[name]}
         aria-describedby={errors[name] ? `reg-${name}-error` : undefined}
@@ -187,6 +192,7 @@ function NewRegistrationForm({ onDone, onCancel }: { onDone: () => void; onCance
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+      <RequiredNote />
       {field("studentId", "Student", students.map((s) => ({ value: s.id, label: s.label })), "Select a student")}
       {field("templateId", "Class", classes.map((c) => ({ value: c.id, label: c.label })), "Select a class")}
       {field("termId", "Term", terms.map((t) => ({ value: t.id, label: t.label })), "Select a term")}

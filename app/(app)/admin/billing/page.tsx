@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { StyledSelect } from "@/components/styled-select";
+import { RequiredMark, RequiredNote } from "@/components/required-mark";
 
 // Dynamically import PDF components (client-only)
 const PDFDownloadLink = dynamic(
@@ -351,8 +352,9 @@ export default function BillingPage() {
         description="Create an invoice for a family group or individual student."
       >
         <div className="grid gap-4">
+          <RequiredNote />
           <div className="grid gap-2">
-            <Label>Invoice For</Label>
+            <Label>Invoice For<RequiredMark /></Label>
             <StyledSelect
               value={genType}
               onChange={(val) => {
@@ -368,7 +370,10 @@ export default function BillingPage() {
           </div>
 
           <div className="grid gap-2">
-            <Label>{genType === "family" ? "Family Group" : "Student"}</Label>
+            <Label>
+              {genType === "family" ? "Family Group" : "Student"}
+              <RequiredMark />
+            </Label>
             <StyledSelect
               value={genTargetId}
               onChange={(val) => setGenTargetId(val)}
@@ -383,7 +388,7 @@ export default function BillingPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label>Period Start</Label>
+              <Label>Period Start<RequiredMark /></Label>
               <input
                 type="date"
                 value={genPeriodStart}
@@ -392,7 +397,7 @@ export default function BillingPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label>Period End</Label>
+              <Label>Period End<RequiredMark /></Label>
               <input
                 type="date"
                 value={genPeriodEnd}

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, useId } from "react";
+import { useState, useRef, useEffect, useCallback, useId, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, Check } from "lucide-react";
+import { ChevronDown, Check, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -17,9 +17,28 @@ interface StyledSelectProps {
   options: Option[];
   placeholder?: string;
   className?: string;
+  /** Tallest the list may grow, in pixels. It is also kept inside the window. */
   maxHeight?: number;
+  /** Show a filter box above the options. Defaults to on for long lists. */
+  searchable?: boolean;
   /** Accessible name. If omitted, a <label> next to the select is used, then the placeholder. */
   "aria-label"?: string;
+}
+
+const DEFAULT_MAX_HEIGHT = 320;
+const SEARCH_THRESHOLD = 8;
+const GAP = 6;
+const EDGE = 12;
+const SEARCH_BOX_HEIGHT = 44;
+
+interface Placement {
+  left: number;
+  width: number;
+  /** Set when opening downward. */
+  top?: number;
+  /** Set when opening upward (distance from the bottom of the window). */
+  bottom?: number;
+  listMaxHeight: number;
 }
 
 export function StyledSelect({
@@ -28,14 +47,34 @@ export function StyledSelect({
   options,
   placeholder = "Select...",
   className,
-  maxHeight,
+  maxHeight = DEFAULT_MAX_HEIGHT,
+  searchable,
   "aria-label": ariaLabel,
 }: StyledSelectProps) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [placement, setPlacement] = useState<Placement>({ left: 0, width: 0, top: 0, listMaxHeight: maxHeight });
   const [labelId, setLabelId] = useState<string>();
   const listId = useId();
   const fallbackLabelId = useId();
+
+  const showSearch = searchable ?? options.length > SEARCH_THRESHOLD;
+  const selectedLabel = options.find((o) => o.value === value)?.label ?? placeholder;
+
+  const visible = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return options;
+    // Every word typed must appear somewhere in the label
+    const words = term.split(/\s+/);
+    return options.filter((o) => {
+      const label = o.label.toLowerCase();
+      return words.every((w) => label.includes(w));
+    });
+  }, [options, query]);
 
   // Most call sites put a plain <label> just before the select; use it as the name
   useEffect(() => {
@@ -48,13 +87,68 @@ export function StyledSelect({
 
   const close = useCallback((refocus: boolean) => {
     setOpen(false);
+    setQuery("");
     if (refocus) buttonRef.current?.focus();
   }, []);
 
-  // Move focus into the list when it opens
+  /**
+   * Places the list under the button, or above it when there is more room there,
+   * and never lets it run past the edge of the window: it scrolls inside instead.
+   */
+  const updatePosition = useCallback(() => {
+    const button = buttonRef.current;
+    if (!button) return;
+    const rect = button.getBoundingClientRect();
+    const chrome = showSearch ? SEARCH_BOX_HEIGHT : 0;
+    const below = window.innerHeight - rect.bottom - GAP - EDGE;
+    const above = rect.top - GAP - EDGE;
+    const openUp = below < Math.min(maxHeight, 220) + chrome && above > below;
+    const room = (openUp ? above : below) - chrome;
+
+    setPlacement({
+      left: rect.left,
+      width: rect.width,
+      ...(openUp ? { bottom: window.innerHeight - rect.top + GAP } : { top: rect.bottom + GAP }),
+      listMaxHeight: Math.max(120, Math.min(maxHeight, room)),
+    });
+  }, [maxHeight, showSearch]);
+
+  useEffect(() => {
+    if (!open) return;
+    updatePosition();
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
+    return () => {
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [open, updatePosition]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as Node;
+      if (
+        buttonRef.current &&
+        !buttonRef.current.contains(target) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(target)
+      ) {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Move focus into the dropdown when it opens: the filter box if there is one
   useEffect(() => {
     if (!open) return;
     const frame = requestAnimationFrame(() => {
+      if (showSearch) {
+        searchRef.current?.focus();
+        return;
+      }
       const list = dropdownRef.current;
       const target =
         list?.querySelector<HTMLElement>("[role=option][aria-selected=true]") ??
@@ -62,12 +156,18 @@ export function StyledSelect({
       target?.focus();
     });
     return () => cancelAnimationFrame(frame);
-  }, [open]);
+  }, [open, showSearch]);
+
+  const optionElements = () =>
+    Array.from(dropdownRef.current?.querySelectorAll<HTMLElement>("[role=option]") ?? []);
+
+  function choose(option: Option) {
+    onChange(option.value);
+    close(true);
+  }
 
   function onListKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    const items = Array.from(
-      dropdownRef.current?.querySelectorAll<HTMLElement>("[role=option]") ?? []
-    );
+    const items = optionElements();
     const index = items.indexOf(document.activeElement as HTMLElement);
     const focusAt = (i: number) => items[Math.max(0, Math.min(items.length - 1, i))]?.focus();
 
@@ -88,62 +188,37 @@ export function StyledSelect({
         break;
       case "ArrowUp":
         event.preventDefault();
-        focusAt(index - 1);
+        // From the first option, go back up to the filter box
+        if (index <= 0 && showSearch) searchRef.current?.focus();
+        else focusAt(index - 1);
         break;
       case "Home":
+        if (document.activeElement === searchRef.current) break;
         event.preventDefault();
         focusAt(0);
         break;
       case "End":
+        if (document.activeElement === searchRef.current) break;
         event.preventDefault();
         focusAt(items.length - 1);
         break;
     }
   }
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
 
-  const selectedLabel = options.find((o) => o.value === value)?.label ?? placeholder;
-
-  const updatePosition = useCallback(() => {
-    if (buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setPosition({
-        top: rect.bottom + 6,
-        left: rect.left,
-        width: rect.width,
-      });
+  function onSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (visible.length > 0) choose(visible[0]);
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      event.stopPropagation();
+      optionElements()[0]?.focus();
+    } else if (event.key === "ArrowUp") {
+      // Nothing above the filter box
+      event.preventDefault();
+      event.stopPropagation();
     }
-  }, []);
-
-  useEffect(() => {
-    if (open) {
-      updatePosition();
-      window.addEventListener("scroll", updatePosition, true);
-      window.addEventListener("resize", updatePosition);
-      return () => {
-        window.removeEventListener("scroll", updatePosition, true);
-        window.removeEventListener("resize", updatePosition);
-      };
-    }
-  }, [open, updatePosition]);
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      const target = e.target as Node;
-      if (
-        buttonRef.current &&
-        !buttonRef.current.contains(target) &&
-        dropdownRef.current &&
-        !dropdownRef.current.contains(target)
-      ) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }
 
   return (
     <div ref={wrapperRef} className={cn("relative", className)}>
@@ -171,7 +246,10 @@ export function StyledSelect({
         <span id={`${listId}-value`} className="truncate">
           {selectedLabel}
         </span>
-        <ChevronDown aria-hidden className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
+        <ChevronDown
+          aria-hidden
+          className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
+        />
       </button>
 
       {typeof document !== "undefined" &&
@@ -184,34 +262,52 @@ export function StyledSelect({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -4, scale: 0.98 }}
                 transition={{ duration: 0.15 }}
+                onKeyDown={onListKeyDown}
                 style={{
                   position: "fixed",
-                  top: position.top,
-                  left: position.left,
-                  width: position.width,
+                  top: placement.top,
+                  bottom: placement.bottom,
+                  left: placement.left,
+                  width: placement.width,
                   zIndex: 9999,
                 }}
                 className="overflow-hidden rounded-2xl border border-border/50 bg-white shadow-lg"
               >
+                {showSearch && (
+                  <div className="relative border-b border-border/60">
+                    <Search
+                      aria-hidden
+                      className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                    />
+                    <input
+                      ref={searchRef}
+                      type="text"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      onKeyDown={onSearchKeyDown}
+                      placeholder="Type to filter…"
+                      aria-label={`Filter ${ariaLabel ?? placeholder}`}
+                      aria-controls={listId}
+                      autoComplete="off"
+                      className="h-11 w-full bg-transparent pl-10 pr-4 text-sm outline-none placeholder:text-muted-foreground"
+                    />
+                  </div>
+                )}
                 <div
                   id={listId}
                   role="listbox"
                   aria-label={ariaLabel ?? placeholder}
-                  onKeyDown={onListKeyDown}
-                  className="py-1"
-                  style={maxHeight ? { maxHeight, overflowY: "auto" } : undefined}
+                  className="overflow-y-auto py-1"
+                  style={{ maxHeight: placement.listMaxHeight }}
                 >
-                  {options.map((option) => (
+                  {visible.map((option) => (
                     <button
                       key={option.value}
                       type="button"
                       role="option"
                       aria-selected={option.value === value}
                       tabIndex={-1}
-                      onClick={() => {
-                        onChange(option.value);
-                        close(true);
-                      }}
+                      onClick={() => choose(option)}
                       className={cn(
                         "flex w-full items-center gap-2 px-4 py-2.5 text-sm transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none",
                         option.value === value && "bg-accent font-medium"
@@ -223,8 +319,10 @@ export function StyledSelect({
                       )}
                     </button>
                   ))}
-                  {options.length === 0 && (
-                    <p className="px-4 py-3 text-sm text-muted-foreground text-center">No options</p>
+                  {visible.length === 0 && (
+                    <p role="status" className="px-4 py-3 text-sm text-muted-foreground text-center">
+                      {options.length === 0 ? "No options" : "No matches"}
+                    </p>
                   )}
                 </div>
               </motion.div>

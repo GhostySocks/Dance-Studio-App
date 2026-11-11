@@ -17,6 +17,7 @@ import { fadeIn } from "@/lib/motion";
 import { portalHome } from "@/lib/portal";
 import { cn } from "@/lib/utils";
 import { registrationSchema, type RegistrationFormData } from "@/lib/validations/registration";
+import { RequiredMark, RequiredNote } from "@/components/required-mark";
 
 const emptyDancer = { firstName: "", lastName: "", dateOfBirth: "", enroll: true };
 
@@ -113,6 +114,7 @@ export function RegisterForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className={cn("space-y-8", className)}>
+      <RequiredNote />
       <div>
         <p id="account-type-label" className="text-sm font-medium">
           Who are you registering?
@@ -152,9 +154,9 @@ export function RegisterForm({
         <legend className="text-base font-semibold">Your details</legend>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="firstName">First name</Label>
+            <Label htmlFor="firstName">First name<RequiredMark /></Label>
             <Input
-              id="firstName"
+              id="firstName" aria-required="true"
               autoComplete="given-name"
               aria-invalid={!!errors.firstName}
               aria-describedby={errors.firstName ? "firstName-error" : undefined}
@@ -163,9 +165,9 @@ export function RegisterForm({
             <FieldError id="firstName-error" message={errors.firstName?.message} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="lastName">Last name</Label>
+            <Label htmlFor="lastName">Last name<RequiredMark /></Label>
             <Input
-              id="lastName"
+              id="lastName" aria-required="true"
               autoComplete="family-name"
               aria-invalid={!!errors.lastName}
               aria-describedby={errors.lastName ? "lastName-error" : undefined}
@@ -174,9 +176,9 @@ export function RegisterForm({
             <FieldError id="lastName-error" message={errors.lastName?.message} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">Email<RequiredMark /></Label>
             <Input
-              id="email"
+              id="email" aria-required="true"
               type="email"
               autoComplete="email"
               aria-invalid={!!errors.email}
@@ -198,9 +200,9 @@ export function RegisterForm({
             <FieldError id="phone-error" message={errors.phone?.message} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">Password<RequiredMark /></Label>
             <Input
-              id="password"
+              id="password" aria-required="true"
               type="password"
               autoComplete="new-password"
               aria-invalid={!!errors.password}
@@ -265,9 +267,9 @@ export function RegisterForm({
                   </div>
                   <div className="mt-3 grid gap-4 sm:grid-cols-3">
                     <div className="space-y-2">
-                      <Label htmlFor={`dancer-${index}-first`}>First name</Label>
+                      <Label htmlFor={`dancer-${index}-first`}>First name<RequiredMark /></Label>
                       <Input
-                        id={`dancer-${index}-first`}
+                        id={`dancer-${index}-first`} aria-required="true"
                         aria-invalid={!!fieldErrors?.firstName}
                         aria-describedby={fieldErrors?.firstName ? `dancer-${index}-first-error` : undefined}
                         {...register(`dancers.${index}.firstName`)}
@@ -278,9 +280,9 @@ export function RegisterForm({
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor={`dancer-${index}-last`}>Last name</Label>
+                      <Label htmlFor={`dancer-${index}-last`}>Last name<RequiredMark /></Label>
                       <Input
-                        id={`dancer-${index}-last`}
+                        id={`dancer-${index}-last`} aria-required="true"
                         aria-invalid={!!fieldErrors?.lastName}
                         aria-describedby={fieldErrors?.lastName ? `dancer-${index}-last-error` : undefined}
                         {...register(`dancers.${index}.lastName`)}

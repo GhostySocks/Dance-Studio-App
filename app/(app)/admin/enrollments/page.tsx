@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { StyledSelect } from "@/components/styled-select";
+import { RequiredMark, RequiredNote } from "@/components/required-mark";
 
 interface EnrollmentRow {
   id: string;
@@ -381,8 +382,9 @@ export default function EnrollmentsPage() {
         className="max-w-2xl"
       >
         <div className="grid gap-4">
+          <RequiredNote />
           <div className="grid gap-2">
-            <Label htmlFor="sessionSelect">Class Session</Label>
+            <Label htmlFor="sessionSelect">Class Session<RequiredMark /></Label>
             <StyledSelect
               value={selectedSessionId}
               onChange={(val) => setSelectedSessionId(val)}
@@ -413,7 +415,7 @@ export default function EnrollmentsPage() {
           )}
 
           <div className="grid gap-2">
-            <Label>Students</Label>
+            <Label>Students<RequiredMark /></Label>
             <div className="rounded-md border max-h-48 overflow-y-auto">
               {students.length === 0 ? (
                 <p className="text-sm text-muted-foreground p-3">No students found</p>

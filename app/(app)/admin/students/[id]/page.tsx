@@ -23,13 +23,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import { Modal } from "@/components/modal";
-import { StyledSelect } from "@/components/styled-select";
+import { AdminEnrollForm } from "@/components/forms/admin-enroll-form";
+import { PLAN_LABELS, PLAN_UNITS, type BillingPlan } from "@/lib/registration-billing";
 
 interface Enrollment {
   id: string;
   status: string;
+  /** Set when the date was booked as part of a term registration. */
+  registrationId: string | null;
   session: {
     id: string;
     startTime: string;
@@ -40,14 +43,16 @@ interface Enrollment {
   };
 }
 
-interface AvailableSession {
+interface Registration {
   id: string;
-  startTime: string;
-  maxCapacity: number;
-  template: { name: string; danceStyle: string | null };
-  teacher: { user: { name: string | null } } | null;
-  room: { name: string } | null;
-  enrollments: { id: string }[];
+  plan: BillingPlan;
+  priceCents: number;
+  status: "ACTIVE" | "CANCELLED";
+  createdAt: string;
+  template: { name: string };
+  term: { name: string } | null;
+  season: { name: string } | null;
+  enrollments: { status: string; session: { startTime: string } }[];
 }
 
 interface Invoice {
@@ -75,6 +80,7 @@ interface StudentDetail {
     user: { name: string | null; email: string };
   } | null;
   enrollments: Enrollment[];
+  registrations: Registration[];
   invoices: Invoice[];
 }
 
@@ -115,9 +121,8 @@ export default function StudentDetailPage() {
   const [student, setStudent] = useState<StudentDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [enrollOpen, setEnrollOpen] = useState(false);
-  const [availableSessions, setAvailableSessions] = useState<AvailableSession[]>([]);
-  const [selectedSessionId, setSelectedSessionId] = useState("");
-  const [enrolling, setEnrolling] = useState(false);
+  const [cancellingRegistration, setCancellingRegistration] = useState<Registration | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const fetchStudent = useCallback(async () => {
     try {
@@ -136,50 +141,26 @@ export default function StudentDetailPage() {
     fetchStudent();
   }, [fetchStudent]);
 
-  async function openEnrollModal() {
-    setSelectedSessionId("");
-    setEnrollOpen(true);
+  async function cancelRegistration() {
+    if (!cancellingRegistration) return;
+    setIsCancelling(true);
     try {
-      const now = new Date();
-      const future = new Date();
-      future.setMonth(future.getMonth() + 3);
-      const res = await fetch(
-        `/api/sessions?startDate=${now.toISOString()}&endDate=${future.toISOString()}`
-      );
-      if (res.ok) {
-        const json = await res.json();
-        setAvailableSessions(json.data);
-      }
-    } catch {
-      toast.error("Failed to load sessions");
-    }
-  }
-
-  async function handleEnroll() {
-    if (!selectedSessionId) return;
-    setEnrolling(true);
-    try {
-      const res = await fetch("/api/enrollments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentId: params.id, sessionId: selectedSessionId }),
-      });
-      const json = await res.json();
+      const res = await fetch(`/api/registrations/${cancellingRegistration.id}`, { method: "DELETE" });
+      const json = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(typeof json.error === "string" ? json.error : "Enrollment failed");
-      }
-      if (json.waitlist) {
-        toast.info(json.message || "Added to waitlist");
+        toast.error(typeof json?.error === "string" ? json.error : "Could not cancel");
       } else {
-        toast.success(json.message || "Enrolled successfully");
+        const released: number = json.data.released;
+        toast.success(
+          `Registration cancelled. ${released} upcoming class${released === 1 ? "" : "es"} released.`
+        );
+        fetchStudent();
       }
-      setEnrollOpen(false);
-      fetchStudent();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Enrollment failed";
-      toast.error(message);
+      setCancellingRegistration(null);
+    } catch {
+      toast.error("Could not cancel. Please try again.");
     } finally {
-      setEnrolling(false);
+      setIsCancelling(false);
     }
   }
 
@@ -218,11 +199,13 @@ export default function StudentDetailPage() {
     );
   }
 
+  // Dates booked through a term registration are summarised under that registration
+  const activeRegistrations = student.registrations.filter((r) => r.status === "ACTIVE");
   const activeEnrollments = student.enrollments.filter(
-    (e) => e.status === "ACTIVE"
+    (e) => e.status === "ACTIVE" && !e.registrationId
   );
   const pastEnrollments = student.enrollments.filter(
-    (e) => e.status !== "ACTIVE"
+    (e) => e.status !== "ACTIVE" && !e.registrationId
   );
 
   return (
@@ -317,27 +300,78 @@ export default function StudentDetailPage() {
           <Card className="rounded-2xl border-0 shadow-md">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Active Enrollments</CardTitle>
-              <Button size="sm" className="rounded-xl" onClick={openEnrollModal}>
+              <Button size="sm" className="rounded-xl" onClick={() => setEnrollOpen(true)}>
                 <Plus className="h-4 w-4 mr-1" />
                 Enroll in Class
               </Button>
             </CardHeader>
             <CardContent>
+              {activeRegistrations.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-medium mb-3">Term registrations</h3>
+                  <ul className="divide-y rounded-md border">
+                    {activeRegistrations.map((registration) => {
+                      const held = registration.enrollments.filter((e) => e.status === "ACTIVE");
+                      const waitlisted = registration.enrollments.filter((e) => e.status === "WAITLIST").length;
+                      const upcoming = held.filter((e) => new Date(e.session.startTime) > new Date()).length;
+                      return (
+                        <li
+                          key={registration.id}
+                          className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                        >
+                          <div>
+                            <p className="text-sm font-semibold">
+                              {registration.template.name}
+                              <span className="font-normal text-muted-foreground">
+                                {" "}
+                                · {registration.season?.name ?? registration.term?.name ?? "Term"}
+                              </span>
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {PLAN_LABELS[registration.plan]} · {formatCurrency(registration.priceCents)}{" "}
+                              {PLAN_UNITS[registration.plan]} · {held.length} class
+                              {held.length === 1 ? "" : "es"} ({upcoming} still to come)
+                              {waitlisted > 0 ? ` · ${waitlisted} waitlisted` : ""}
+                            </p>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCancellingRegistration(registration)}
+                          >
+                            Cancel
+                            <span className="sr-only"> {registration.template.name} registration</span>
+                          </Button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+
+              {activeRegistrations.length > 0 && activeEnrollments.length > 0 && (
+                <h3 className="text-sm font-medium mb-3">Single classes</h3>
+              )}
+
               {activeEnrollments.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">
-                  No active enrollments.
-                </p>
+                activeRegistrations.length === 0 && (
+                  <p className="text-sm text-muted-foreground py-4 text-center">
+                    No active enrollments.
+                  </p>
+                )
               ) : (
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Class</TableHead>
-                        <TableHead>Dance Style</TableHead>
+                        <TableHead>Date</TableHead>
                         <TableHead>Teacher</TableHead>
                         <TableHead>Room</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead></TableHead>
+                        <TableHead>
+                          <span className="sr-only">Actions</span>
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -346,9 +380,7 @@ export default function StudentDetailPage() {
                           <TableCell className="font-medium">
                             {enrollment.session.template.name}
                           </TableCell>
-                          <TableCell>
-                            {enrollment.session.template.danceStyle}
-                          </TableCell>
+                          <TableCell>{formatDateTime(enrollment.session.startTime)}</TableCell>
                           <TableCell>
                             {enrollment.session.teacher?.user.name || "-"}
                           </TableCell>
@@ -370,8 +402,9 @@ export default function StudentDetailPage() {
                               size="sm"
                               onClick={() => cancelEnrollment(enrollment.id)}
                               title="Cancel enrollment"
+                              aria-label={`Cancel ${enrollment.session.template.name} on ${formatDateTime(enrollment.session.startTime)}`}
                             >
-                              <X className="h-4 w-4 text-destructive" />
+                              <X className="h-4 w-4 text-destructive" aria-hidden />
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -488,34 +521,41 @@ export default function StudentDetailPage() {
       <Modal
         open={enrollOpen}
         onClose={() => setEnrollOpen(false)}
-        title="Enroll in Class"
-        description={`Select a class session to enroll ${student.firstName} in.`}
-        className="max-w-lg"
+        title={`Enroll ${student.firstName}`}
+        description="Pick the class first, then the whole term or a single date."
+        className="max-w-xl overflow-visible"
       >
-            <div className="grid gap-4">
-              <StyledSelect
-                value={selectedSessionId}
-                onChange={(value) => setSelectedSessionId(value)}
-                placeholder="Select a session..."
-                options={availableSessions.map((s) => {
-                  const start = new Date(s.startTime);
-                  const enrolled = s.enrollments?.length ?? 0;
-                  return {
-                    value: s.id,
-                    label: `${s.template.name} — ${start.toLocaleDateString()} ${start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} (${enrolled}/${s.maxCapacity})`,
-                  };
-                })}
-              />
-              <div className="flex justify-end gap-2 pt-4 border-t">
-                <Button variant="outline" onClick={() => setEnrollOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleEnroll} disabled={enrolling || !selectedSessionId}>
-                  {enrolling && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Enroll
-                </Button>
-              </div>
-            </div>
+        <AdminEnrollForm
+          studentId={student.id}
+          studentName={student.firstName}
+          onCancel={() => setEnrollOpen(false)}
+          onDone={() => {
+            setEnrollOpen(false);
+            fetchStudent();
+          }}
+        />
+      </Modal>
+
+      <Modal
+        open={!!cancellingRegistration}
+        onClose={() => setCancellingRegistration(null)}
+        title="Cancel registration?"
+        description={
+          cancellingRegistration
+            ? `${student.firstName} will be removed from the remaining ${cancellingRegistration.template.name} dates and will not be charged further instalments. Anything already invoiced stays as it is.`
+            : undefined
+        }
+        className="max-w-md"
+      >
+        <div className="flex justify-end gap-2 border-t pt-4">
+          <Button variant="outline" onClick={() => setCancellingRegistration(null)} disabled={isCancelling}>
+            Keep
+          </Button>
+          <Button variant="destructive" onClick={cancelRegistration} disabled={isCancelling}>
+            {isCancelling && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Cancel registration
+          </Button>
+        </div>
       </Modal>
     </div>
   );

@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { studioSchema, type StudioFormData } from "@/lib/validations/account";
+import { RequiredMark, RequiredNote } from "@/components/required-mark";
 
 const COMMON_TIMEZONES = [
   "America/New_York",
@@ -40,17 +41,22 @@ function Field({
   label,
   error,
   hint,
+  required,
   children,
 }: {
   id: string;
   label: string;
   error?: string;
   hint?: string;
+  required?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
+      <Label htmlFor={id}>
+        {label}
+        {required && <RequiredMark />}
+      </Label>
       {children}
       {error ? (
         <p id={`${id}-error`} className="text-sm text-destructive">
@@ -176,8 +182,9 @@ export default function AdminSettingsPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
+            <RequiredNote />
             <div className="grid gap-5 sm:grid-cols-2">
-              <Field id="name" label="Studio name" error={errors.name?.message}>
+              <Field id="name" label="Studio name" required error={errors.name?.message}>
                 <Input
                   id="name"
                   aria-invalid={!!errors.name}
@@ -226,6 +233,7 @@ export default function AdminSettingsPage() {
               <Field
                 id="timezone"
                 label="Timezone"
+                required
                 error={errors.timezone?.message}
                 hint="Class times are shown in this timezone."
               >
@@ -245,6 +253,7 @@ export default function AdminSettingsPage() {
               <Field
                 id="billingCycleDay"
                 label="Billing day of month"
+                required
                 error={errors.billingCycleDay?.message}
                 hint="1 to 28, so it exists in every month."
               >

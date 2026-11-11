@@ -72,6 +72,21 @@ export async function getStudentById(id: string) {
         },
         orderBy: { createdAt: "desc" },
       },
+      // Whole-term registrations, each summarising the dates it booked
+      registrations: {
+        select: {
+          id: true,
+          plan: true,
+          priceCents: true,
+          status: true,
+          createdAt: true,
+          template: { select: { name: true } },
+          term: { select: { name: true } },
+          season: { select: { name: true } },
+          enrollments: { select: { status: true, session: { select: { startTime: true } } } },
+        },
+        orderBy: { createdAt: "desc" },
+      },
       scholarships: true,
       invoices: {
         select: { id: true, status: true, totalCents: true, periodStart: true, periodEnd: true },
