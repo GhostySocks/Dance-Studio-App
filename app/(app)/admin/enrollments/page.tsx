@@ -329,7 +329,7 @@ export default function EnrollmentsPage() {
 
   return (
     <div>
-      <PageHeader title="Enrollments" description="Manage class enrollments and waitlists">
+      <PageHeader title="Class Enrollments" description="Every individual class date a student is booked into, including waitlists">
         <Button onClick={openEnrollDialog}>
           <Plus className="h-4 w-4 mr-2" />
           Enroll Student

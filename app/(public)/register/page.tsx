@@ -165,8 +165,8 @@ export default async function RegisterPage({
     body = (
       <div className="space-y-4">
         <p className="text-muted-foreground">
-          You are signed in as staff. Enroll students from the admin Enrollments or Registrations
-          pages.
+          You are signed in as staff. Enroll students from the admin Term Enrollments or Class
+          Enrollments pages.
         </p>
         <LinkButton href={portalHome(auth.user.role)} className="h-10 px-5">
           Go to dashboard

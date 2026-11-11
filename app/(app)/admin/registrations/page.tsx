@@ -248,7 +248,7 @@ export default function AdminRegistrationsPage() {
       setRows(data.registrations);
       setTotalPages(data.totalPages || 1);
     } catch {
-      toast.error("Failed to load registrations");
+      toast.error("Failed to load term enrollments");
     } finally {
       setLoading(false);
     }
@@ -267,7 +267,7 @@ export default function AdminRegistrationsPage() {
         toast.error(await readError(res, "Could not cancel"));
       } else {
         const { data } = await res.json();
-        toast.success(`Registration cancelled. ${data.released} upcoming date${data.released === 1 ? "" : "s"} released.`);
+        toast.success(`Term enrollment cancelled. ${data.released} upcoming date${data.released === 1 ? "" : "s"} released.`);
         load();
       }
       setCancelling(null);
@@ -318,7 +318,7 @@ export default function AdminRegistrationsPage() {
               Cancel
               <span className="sr-only">
                 {" "}
-                registration for {row.original.student.firstName} {row.original.student.lastName}
+                term enrollment for {row.original.student.firstName} {row.original.student.lastName}
               </span>
             </Button>
           ) : null,
@@ -329,10 +329,10 @@ export default function AdminRegistrationsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Registrations" description="Students registered for a class for a whole term or season">
+      <PageHeader title="Term Enrollments" description="Students enrolled in a class for a whole term or season">
         <Button onClick={() => setCreating(true)}>
           <Plus className="h-4 w-4" aria-hidden />
-          New registration
+          New term enrollment
         </Button>
       </PageHeader>
 
@@ -369,7 +369,7 @@ export default function AdminRegistrationsPage() {
       <Modal
         open={creating}
         onClose={() => setCreating(false)}
-        title="New registration"
+        title="New term enrollment"
         description="Register a student for a class for a whole term."
         className="max-w-lg"
       >
@@ -385,7 +385,7 @@ export default function AdminRegistrationsPage() {
       <Modal
         open={!!cancelling}
         onClose={() => setCancelling(null)}
-        title="Cancel registration?"
+        title="Cancel term enrollment?"
         description={
           cancelling
             ? `${cancelling.student.firstName} will be removed from the remaining ${cancelling.template.name} dates and will not be charged further instalments. Anything already invoiced stays as it is.`
@@ -399,7 +399,7 @@ export default function AdminRegistrationsPage() {
           </Button>
           <Button variant="destructive" onClick={onCancel} disabled={isCancelling}>
             {isCancelling && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-            Cancel registration
+            Cancel term enrollment
           </Button>
         </div>
       </Modal>
