@@ -19,10 +19,21 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { StyledSelect } from "@/components/styled-select";
 
 import { studentSchema, type StudentFormData } from "@/lib/validations/student";
 import { RequiredMark, RequiredNote } from "@/components/required-mark";
+import {
+  HouseholdFields,
+  emptyHousehold,
+  householdFor,
+  householdPayload,
+  validateHousehold,
+  type FamilyOption,
+  type GuardianOption,
+  type HouseholdDraft,
+  type HouseholdErrors,
+} from "@/components/forms/household-fields";
+import { InviteLinkNotice, type InviteResult } from "@/components/invite-link-notice";
 
 interface Student {
   id: string;
@@ -43,22 +54,6 @@ interface Student {
   enrollments: { id: string }[];
 }
 
-interface Family {
-  id: string;
-  name: string;
-  guardians: {
-    guardian: {
-      id: string;
-      user: { name: string | null; email: string };
-    };
-  }[];
-}
-
-interface Guardian {
-  id: string;
-  name: string;
-  email: string;
-}
 
 export default function StudentsPage() {
   const router = useRouter();
@@ -68,8 +63,11 @@ export default function StudentsPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
 
-  const [families, setFamilies] = useState<Family[]>([]);
-  const [guardians, setGuardians] = useState<Guardian[]>([]);
+  const [families, setFamilies] = useState<FamilyOption[]>([]);
+  const [guardians, setGuardians] = useState<GuardianOption[]>([]);
+  const [household, setHousehold] = useState<HouseholdDraft>(emptyHousehold);
+  const [householdErrors, setHouseholdErrors] = useState<HouseholdErrors>({});
+  const [invite, setInvite] = useState<InviteResult | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
@@ -111,28 +109,16 @@ export default function StudentsPage() {
 
   const fetchFamiliesAndGuardians = useCallback(async () => {
     try {
-      const res = await fetch("/api/families?perPage=100");
-      if (!res.ok) throw new Error("Failed to fetch families");
-      const json = await res.json();
-      const fams: Family[] = json.data.families;
-      setFamilies(fams);
-
-      const guardianMap = new Map<string, Guardian>();
-      for (const fam of fams) {
-        for (const fg of fam.guardians) {
-          const g = fg.guardian;
-          if (!guardianMap.has(g.id)) {
-            guardianMap.set(g.id, {
-              id: g.id,
-              name: g.user.name || g.user.email,
-              email: g.user.email,
-            });
-          }
-        }
-      }
-      setGuardians(Array.from(guardianMap.values()));
+      const [familiesRes, guardiansRes] = await Promise.all([
+        fetch("/api/families?perPage=200"),
+        fetch("/api/guardians"),
+      ]);
+      if (!familiesRes.ok || !guardiansRes.ok) throw new Error("Failed to fetch");
+      const fams: FamilyOption[] = (await familiesRes.json()).data.families;
+      setFamilies(fams.map((f) => ({ id: f.id, name: f.name })));
+      setGuardians((await guardiansRes.json()).data);
     } catch {
-      toast.error("Failed to load families");
+      toast.error("Failed to load guardians and families");
     }
   }, []);
 
@@ -145,6 +131,8 @@ export default function StudentsPage() {
   }, [fetchFamiliesAndGuardians]);
 
   function openAddDialog() {
+    setHousehold(emptyHousehold());
+    setHouseholdErrors({});
     setEditingStudent(null);
     form.reset({
       firstName: "",
@@ -161,6 +149,8 @@ export default function StudentsPage() {
   }
 
   function openEditDialog(student: Student) {
+    setHousehold(householdFor(student));
+    setHouseholdErrors({});
     setEditingStudent(student);
     form.reset({
       firstName: student.firstName,
@@ -179,6 +169,12 @@ export default function StudentsPage() {
   }
 
   async function onSubmit(data: Record<string, unknown>) {
+    const problems = validateHousehold(household);
+    setHouseholdErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      toast.error(Object.values(problems)[0]);
+      return;
+    }
     setIsSubmitting(true);
     try {
       const url = editingStudent
@@ -189,12 +185,12 @@ export default function StudentsPage() {
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, ...householdPayload(household) }),
       });
 
+      const json = await res.json().catch(() => null);
       if (!res.ok) {
-        const json = await res.json();
-        throw new Error(json.error?.toString() || "Request failed");
+        throw new Error(typeof json?.error === "string" ? json.error : "Request failed");
       }
 
       toast.success(
@@ -204,6 +200,13 @@ export default function StudentsPage() {
       );
       setDialogOpen(false);
       fetchStudents();
+      // A new guardian or family group may have been created along the way
+      fetchFamiliesAndGuardians();
+      const invited: InviteResult | null = json?.data?.invite ?? null;
+      if (invited) {
+        if (invited.emailed) toast.success(`${invited.name} was emailed a link to set up their account.`);
+        setInvite(invited);
+      }
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "An error occurred";
@@ -413,29 +416,17 @@ export default function StudentsPage() {
             </div>
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="guardianId">Guardian</Label>
-            <StyledSelect
-              value={form.watch("guardianId") ?? ""}
-              onChange={(val) => form.setValue("guardianId", val)}
-              options={[
-                { value: "", label: "None" },
-                ...guardians.map((g) => ({ value: g.id, label: g.name })),
-              ]}
-            />
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="familyGroupId">Family Group</Label>
-            <StyledSelect
-              value={form.watch("familyGroupId") ?? ""}
-              onChange={(val) => form.setValue("familyGroupId", val)}
-              options={[
-                { value: "", label: "None" },
-                ...families.map((f) => ({ value: f.id, label: f.name })),
-              ]}
-            />
-          </div>
+          <HouseholdFields
+            value={household}
+            onChange={(next) => {
+              setHousehold(next);
+              if (Object.keys(householdErrors).length > 0) setHouseholdErrors(validateHousehold(next));
+            }}
+            errors={householdErrors}
+            guardians={guardians}
+            families={families}
+            studentLastName={form.watch("lastName") ?? ""}
+          />
 
           <div className="grid gap-2">
             <Label htmlFor="medicalNotes">Medical Notes</Label>
@@ -472,6 +463,8 @@ export default function StudentsPage() {
           </div>
         </form>
       </Modal>
+
+      <InviteLinkNotice result={invite} onClose={() => setInvite(null)} />
 
       {/* Delete Confirmation Modal */}
       <Modal

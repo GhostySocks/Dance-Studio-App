@@ -206,6 +206,12 @@ Follow these on every file, every session, without exception.
 - Adding a removed person again with the same email re-enables the same account.
 - **Sessions are re-checked on every request** (`jwt` callback → `lib/account-status.ts`, cached 15 s): a removed or disabled account is signed out at once, and role changes take effect without signing in again. `middleware.ts` only reads the cookie, so API routes must keep calling `getServerSession`.
 
+### Students, guardians and family groups
+- A student may have a guardian, a family group, both, or neither (an adult student). **A guardian does not require a family group**: such a student is invoiced on their own and the guardian pays through the portal.
+- The admin student form (`HouseholdFields`) asks for the guardian explicitly: an existing one, a new one with contact details, or none. A new guardian gets a PARENT account with no password and, if ticked, a set-password link.
+- A family group can be picked, created from the same form, or skipped. Whenever a student is saved with both a guardian and a family group, the guardian is added to that group so they can see its invoices.
+- Student, new guardian and new family group are saved in one transaction (`lib/db/household.ts`): if any part fails (for example the guardian email is already in use), nothing is created.
+
 ### Email your teacher
 - Parents and adult students message a teacher through `POST /api/portal/teacher-messages`; the server looks up the teacher and sends the email with reply-to set to the sender. **A teacher email address must never be sent to a parent or student browser** (portal queries select the teacher `id` and name only).
 - Allowed only for teachers of the sender own students current classes (upcoming, or within `TEACHER_CONTACT_DAYS`, in `lib/teacher-contact.ts`, which the pages also use to decide whether to show the button). Rate limited per sender. The message text is not stored; an AuditLog row records that one was sent.

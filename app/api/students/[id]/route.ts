@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getStudentById, updateStudent, deleteStudent } from "@/lib/db/students";
+import { getStudentById, deleteStudent } from "@/lib/db/students";
+import { saveStudent } from "@/lib/student-api";
 import { studentSchema } from "@/lib/validations/student";
 
 export async function GET(
@@ -39,23 +40,16 @@ export async function PUT(
     const body = await req.json();
     const parsed = studentSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "Invalid student details" },
+        { status: 400 }
+      );
     }
 
-    const data = parsed.data;
-    const student = await updateStudent(params.id, {
-      firstName: data.firstName,
-      lastName: data.lastName,
-      dateOfBirth: data.dateOfBirth ?? null,
-      email: data.email || null,
-      phone: data.phone || null,
-      medicalNotes: data.medicalNotes || null,
-      notes: data.notes || null,
-      guardianId: data.guardianId || null,
-      familyGroupId: data.familyGroupId || null,
-    });
-
-    return NextResponse.json({ data: student });
+    if (!(await getStudentById(params.id))) {
+      return NextResponse.json({ error: "Student not found" }, { status: 404 });
+    }
+    return await saveStudent(parsed.data, session.user.id, params.id);
   } catch (error) {
     console.error("PUT /api/students/[id] error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

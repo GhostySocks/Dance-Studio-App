@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getStudents, createStudent } from "@/lib/db/students";
+import { getStudents } from "@/lib/db/students";
+import { saveStudent } from "@/lib/student-api";
 import { studentSchema } from "@/lib/validations/student";
 
 export async function GET(req: NextRequest) {
@@ -34,23 +35,14 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const parsed = studentSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "Invalid student details" },
+        { status: 400 }
+      );
     }
 
-    const data = parsed.data;
-    const student = await createStudent({
-      firstName: data.firstName,
-      lastName: data.lastName,
-      dateOfBirth: data.dateOfBirth ?? null,
-      email: data.email || null,
-      phone: data.phone || null,
-      medicalNotes: data.medicalNotes || null,
-      notes: data.notes || null,
-      guardianId: data.guardianId || null,
-      familyGroupId: data.familyGroupId || null,
-    });
-
-    return NextResponse.json({ data: student }, { status: 201 });
+    // Creates the student with any new guardian and family group in one step
+    return await saveStudent(parsed.data, session.user.id);
   } catch (error) {
     console.error("POST /api/students error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
