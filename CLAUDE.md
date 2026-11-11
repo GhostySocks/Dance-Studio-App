@@ -34,8 +34,8 @@ The app also has a **public-facing website** (homepage, schedule, class detail, 
 | PDF | @react-pdf/renderer |
 | Calendar UI | FullCalendar (React) |
 | Charts | Recharts |
-| Background Jobs | Inngest or Vercel Cron |
-| Hosting | Vercel |
+| Background Jobs | In-process scheduler (`instrumentation.ts` → `lib/billing-scheduler.ts`), once per UTC day |
+| Hosting | Railway (single always-on Node service; see `docs/DEPLOY.md`) |
 | Storage | Supabase Storage |
 | Error Tracking | Sentry |
 
@@ -185,6 +185,13 @@ Follow these on every file, every session, without exception.
 - Public endpoints (`/api/register`, `/api/account/*`) are rate limited with `lib/rate-limit.ts` (in-memory, per instance).
 - Enrollment runs in a transaction that locks the session row, so capacity cannot be oversold; keep new enrollment paths going through `enrollStudent`.
 
+### Deployment
+- Hosting is Railway; there is no Railway config file. Railway uses the `build` and `start` scripts, so changes to how the app builds, migrates or starts belong in `package.json`. Do not add `railway.json` (deprecated by Railway) or `vercel.json`.
+- `npm run start` runs `prisma migrate deploy` before `next start`. Migrations must therefore be safe to apply while the previous version is still serving.
+- The nightly billing job runs inside the server and claims each day with a `BILLING_JOB_RUN` AuditLog row. The app must stay a single always-on instance for it to fire on time.
+- `/api/health` is the platform health check (includes a database ping).
+- Keep `.env.example` and the variable table in `docs/DEPLOY.md` in sync when adding an environment variable.
+
 ### Accessibility
 - Dialogs use `components/modal.tsx` (`Modal`): labelled, Escape to close, focus trapped and restored. Do not hand-roll overlay divs.
 - Icon-only buttons need an accessible name (`aria-label` or an `sr-only` span). Form fields need a real label (`htmlFor`/`id`).
@@ -325,7 +332,11 @@ SUPABASE_SERVICE_ROLE_KEY=""
 
 # App
 NEXT_PUBLIC_APP_URL="https://yourdomain.com"
-NEXT_PUBLIC_STUDIO_SLUG="my-dance-studio"
+
+# Nightly billing (all optional)
+CRON_SECRET=""
+BILLING_JOB_HOUR_UTC="9"
+DISABLE_BILLING_SCHEDULER=""
 ```
 
 ---
@@ -376,6 +387,12 @@ npx prisma db seed
 
 # Open Prisma Studio (DB browser)
 npx prisma studio
+
+# Production start (applies migrations first; this is what Railway runs)
+npm run start
+
+# Start a production build without touching the database schema
+npm run start:local
 
 # Run the test suite
 npm test

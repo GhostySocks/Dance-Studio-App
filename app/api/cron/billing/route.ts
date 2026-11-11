@@ -5,12 +5,12 @@ import { isAdmin } from "@/lib/permissions";
 import { runBillingJobs } from "@/lib/payment-service";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
 
 /**
- * Nightly billing job (see vercel.json): marks past-due invoices OVERDUE and
- * charges invoices on auto-pay. Vercel Cron authenticates with
- * `Authorization: Bearer $CRON_SECRET`; an admin can also trigger it while signed in.
+ * Runs the billing job on demand: marks past-due invoices OVERDUE and charges
+ * invoices on auto-pay. In production the job normally runs from the in-process
+ * scheduler (lib/billing-scheduler.ts); this endpoint is for an external scheduler
+ * (`Authorization: Bearer $CRON_SECRET`) or an admin triggering it while signed in.
  */
 export async function GET(req: NextRequest) {
   try {

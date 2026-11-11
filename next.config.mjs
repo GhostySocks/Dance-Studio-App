@@ -6,6 +6,8 @@ const nextConfig = {
   },
   experimental: {
     esmExternals: "loose",
+    // Runs instrumentation.ts on server start (nightly billing scheduler)
+    instrumentationHook: true,
   },
   webpack: (config) => {
     // Fix for @react-pdf/renderer

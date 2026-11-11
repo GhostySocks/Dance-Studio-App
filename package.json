@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "prisma migrate deploy && next start",
+    "start:local": "next start",
+    "postinstall": "prisma generate",
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -64,5 +66,8 @@
     "ts-node": "^10.9.2",
     "typescript": "^5",
     "vitest": "^3.2.7"
+  },
+  "engines": {
+    "node": ">=20.9.0 <25"
   }
 }
