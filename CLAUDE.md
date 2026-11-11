@@ -196,6 +196,12 @@ Follow these on every file, every session, without exception.
 - `/api/health` is the platform health check (includes a database ping).
 - Keep `.env.example` and the variable table in `docs/DEPLOY.md` in sync when adding an environment variable.
 
+### Staff accounts
+- Teachers and administrators are created by an admin (Teachers page; Settings → Administrators), never through public sign-up. The role is fixed by the endpoint (`POST /api/teachers` → TEACHER, `POST /api/admins` → ADMIN); nothing in the request can change it.
+- Staff are created **without a password** and get a single-use, 7-day set-password link (`sendStaffInvite`, which reuses the password-reset token). An account with no password cannot sign in.
+- The link is returned to the admin only when the email could not be sent (no email provider), so they can pass it on; never return it otherwise.
+- There is no UI yet to remove or demote a staff member.
+
 ### Accessibility
 - Dialogs use `components/modal.tsx` (`Modal`): labelled, Escape to close, focus trapped and restored. Do not hand-roll overlay divs.
 - Icon-only buttons need an accessible name (`aria-label` or an `sr-only` span). Form fields need a real label (`htmlFor`/`id`).

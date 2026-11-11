@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { requireAdmin } from "@/lib/api-auth";
+import { isEmailRegistered } from "@/lib/db/registration";
+import { createTeacherAccount } from "@/lib/db/staff";
 import { getTeachers } from "@/lib/db/teachers";
+import { EMAIL_IN_USE, inviteStaff, isDuplicateEmail } from "@/lib/staff-api";
+import { newTeacherSchema, parseSpecialties } from "@/lib/validations/staff";
 
 // Reads the session cookie, so it can never be prerendered
 export const dynamic = "force-dynamic";
@@ -22,6 +27,45 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ data: result });
   } catch (error) {
     console.error("GET /api/teachers error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+/** An administrator adds a teacher, who sets their own password by link. */
+export async function POST(req: NextRequest) {
+  try {
+    const { session, response } = await requireAdmin();
+    if (response) return response;
+
+    const parsed = newTeacherSchema.safeParse(await req.json().catch(() => null));
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "Invalid details" },
+        { status: 400 }
+      );
+    }
+    const { specialties, ...data } = parsed.data;
+    if (await isEmailRegistered(data.email)) {
+      return NextResponse.json({ error: EMAIL_IN_USE }, { status: 409 });
+    }
+
+    let created;
+    try {
+      created = await createTeacherAccount(
+        { ...data, specialties: parseSpecialties(specialties) },
+        session.user.id
+      );
+    } catch (error) {
+      if (isDuplicateEmail(error)) {
+        return NextResponse.json({ error: EMAIL_IN_USE }, { status: 409 });
+      }
+      throw error;
+    }
+
+    const invite = await inviteStaff(created.user, "a teacher");
+    return NextResponse.json({ data: { id: created.teacherId, ...invite } }, { status: 201 });
+  } catch (error) {
+    console.error("POST /api/teachers error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

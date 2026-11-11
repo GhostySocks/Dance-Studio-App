@@ -6,7 +6,11 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
-import { teacherSchema, type TeacherFormData } from "@/lib/validations/teacher";
+import {
+  teacherProfileFormSchema,
+  type TeacherProfileFormData as TeacherFormData,
+} from "@/lib/validations/staff";
+import { InviteLinkNotice, announceInvite, type InviteResult } from "@/components/invite-link-notice";
 import { formatDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,6 +61,32 @@ export default function AdminTeacherDetailPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [sendingLink, setSendingLink] = useState(false);
+  const [invite, setInvite] = useState<InviteResult | null>(null);
+
+  async function sendSignInLink() {
+    if (!teacher) return;
+    setSendingLink(true);
+    try {
+      const res = await fetch(`/api/staff/${teacher.user.id}/invite`, { method: "POST" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        toast.error(typeof json?.error === "string" ? json.error : "Could not send the link");
+        return;
+      }
+      const result = {
+        name: teacher.user.name ?? "the teacher",
+        emailed: json.data.emailed,
+        inviteUrl: json.data.inviteUrl,
+      };
+      announceInvite(result, false);
+      setInvite(result);
+    } catch {
+      toast.error("Could not send the link. Please try again.");
+    } finally {
+      setSendingLink(false);
+    }
+  }
 
   const {
     register,
@@ -64,7 +94,7 @@ export default function AdminTeacherDetailPage() {
     reset,
     formState: { errors },
   } = useForm<TeacherFormData>({
-    resolver: zodResolver(teacherSchema),
+    resolver: zodResolver(teacherProfileFormSchema),
   });
 
   const fetchTeacher = useCallback(async () => {
@@ -89,7 +119,7 @@ export default function AdminTeacherDetailPage() {
     if (teacher) {
       reset({
         bio: teacher.bio ?? "",
-        specialties: teacher.specialties,
+        specialties: teacher.specialties.join(", "),
         phone: teacher.phone ?? "",
       });
     }
@@ -98,23 +128,10 @@ export default function AdminTeacherDetailPage() {
   const onSubmit = async (data: TeacherFormData) => {
     setSaving(true);
     try {
-      // Split specialties from comma-separated string if it comes as a string
-      const specialties =
-        typeof data.specialties === "string"
-          ? (data.specialties as unknown as string)
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean)
-          : data.specialties;
-
       const res = await fetch(`/api/teachers/${teacherId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bio: data.bio || null,
-          specialties,
-          phone: data.phone || null,
-        }),
+        body: JSON.stringify(data),
       });
 
       if (!res.ok) throw new Error("Failed to update teacher");
@@ -135,7 +152,7 @@ export default function AdminTeacherDetailPage() {
     if (teacher) {
       reset({
         bio: teacher.bio ?? "",
-        specialties: teacher.specialties,
+        specialties: teacher.specialties.join(", "),
         phone: teacher.phone ?? "",
       });
     }
@@ -168,7 +185,12 @@ export default function AdminTeacherDetailPage() {
         Back to Teachers
       </Button>
 
-      <PageHeader title={teacher.user.name ?? "Teacher"} />
+      <PageHeader title={teacher.user.name ?? "Teacher"}>
+        <Button variant="outline" onClick={sendSignInLink} disabled={sendingLink}>
+          {sendingLink ? "Sending…" : "Send sign-in link"}
+        </Button>
+      </PageHeader>
+      <InviteLinkNotice result={invite} onClose={() => setInvite(null)} />
 
       {/* Teacher Info Card */}
       <Card>
@@ -241,7 +263,6 @@ export default function AdminTeacherDetailPage() {
                 <Input
                   id="specialties"
                   placeholder="Ballet, Contemporary, Jazz"
-                  defaultValue={teacher.specialties.join(", ")}
                   {...register("specialties")}
                 />
                 {errors.specialties && (

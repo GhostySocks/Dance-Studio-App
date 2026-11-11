@@ -250,3 +250,30 @@ export async function sendRegistrationConfirmation(registrationId: string) {
     return { sent: false };
   }
 }
+
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+/**
+ * Emails a staff member a single-use link to set their password and sign in.
+ * Also returns the link, so that when email is not configured an admin can pass
+ * it on themselves. Used for new staff and for "send a sign-in link" later.
+ */
+export async function sendStaffInvite(user: { email: string; name: string }, roleLabel: string) {
+  const token = await createAccountToken("reset", user.email, INVITE_TTL_MS);
+  const url = appUrl(`/reset-password?token=${token}`);
+  try {
+    const studio = await getStudioInfo();
+    const result = await sendAccountLink(user.email, "Set up your account", {
+      heading: `Welcome to ${studio.name}`,
+      message: `Hi ${user.name}, you have been added as ${roleLabel}. Choose a password to finish setting up your account.`,
+      buttonLabel: "Set my password",
+      url,
+      footnote:
+        "This link works once and expires in 7 days. After that, use Forgot password on the sign-in page.",
+    });
+    return { sent: result.sent, url };
+  } catch (error) {
+    console.error("sendStaffInvite failed:", error);
+    return { sent: false, url };
+  }
+}

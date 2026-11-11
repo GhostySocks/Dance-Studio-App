@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ColumnDef } from "@tanstack/react-table";
-import { Eye } from "lucide-react";
+import { Eye, Plus } from "lucide-react";
+import { toast } from "sonner";
+import { NewTeacherForm } from "@/components/forms/new-teacher-form";
+import { InviteLinkNotice, announceInvite, type InviteResult } from "@/components/invite-link-notice";
+import { Modal } from "@/components/modal";
 import { PageHeader } from "@/components/page-header";
 import { SearchInput } from "@/components/search-input";
 import { DataTable } from "@/components/data-table";
@@ -86,6 +90,8 @@ export default function AdminTeachersPage() {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [invite, setInvite] = useState<InviteResult | null>(null);
 
   const fetchTeachers = useCallback(async () => {
     setLoading(true);
@@ -102,6 +108,7 @@ export default function AdminTeachersPage() {
       setTotalPages(json.data.totalPages);
     } catch {
       setTeachers([]);
+      toast.error("Failed to load teachers");
     } finally {
       setLoading(false);
     }
@@ -121,7 +128,30 @@ export default function AdminTeachersPage() {
       <PageHeader
         title="Teachers"
         description="Manage your studio's teaching staff"
-      />
+      >
+        <Button onClick={() => setAdding(true)}>
+          <Plus className="h-4 w-4" aria-hidden />
+          Add teacher
+        </Button>
+      </PageHeader>
+
+      <Modal
+        open={adding}
+        onClose={() => setAdding(false)}
+        title="Add teacher"
+        description="They will get a link to choose their own password."
+      >
+        <NewTeacherForm
+          onCancel={() => setAdding(false)}
+          onCreated={(result) => {
+            setAdding(false);
+            announceInvite(result, true);
+            setInvite(result);
+            fetchTeachers();
+          }}
+        />
+      </Modal>
+      <InviteLinkNotice result={invite} onClose={() => setInvite(null)} />
 
       <SearchInput
         value={search}

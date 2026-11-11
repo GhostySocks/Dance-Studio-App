@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, Copy, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { AdminTeamCard } from "@/components/admin-team-card";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -265,6 +266,8 @@ export default function AdminSettingsPage() {
           </form>
         </CardContent>
       </Card>
+
+      <AdminTeamCard />
 
       <Card className="rounded-2xl border-0 shadow-md">
         <CardHeader>
