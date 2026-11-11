@@ -11,6 +11,7 @@ import {
   type TeacherProfileFormData as TeacherFormData,
 } from "@/lib/validations/staff";
 import { InviteLinkNotice, announceInvite, type InviteResult } from "@/components/invite-link-notice";
+import { Modal } from "@/components/modal";
 import { formatDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,6 +51,8 @@ interface Teacher {
     image: string | null;
   };
   sessions: Session[];
+  /** Classes they are still due to teach. */
+  upcomingCount: number;
 }
 
 export default function AdminTeacherDetailPage() {
@@ -62,6 +65,53 @@ export default function AdminTeacherDetailPage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sendingLink, setSendingLink] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [isRemoving, setIsRemoving] = useState(false);
+  const [others, setOthers] = useState<{ id: string; name: string }[]>([]);
+  const [reassignTo, setReassignTo] = useState("");
+
+  async function openRemove() {
+    setReassignTo("");
+    setRemoving(true);
+    if (!teacher || teacher.upcomingCount === 0) return;
+    try {
+      const res = await fetch("/api/teachers?perPage=100");
+      if (!res.ok) throw new Error("Failed");
+      const list: { id: string; user: { name: string | null } }[] = (await res.json()).data.teachers;
+      setOthers(
+        list.filter((t) => t.id !== teacher.id).map((t) => ({ id: t.id, name: t.user.name ?? "Teacher" }))
+      );
+    } catch {
+      toast.error("Failed to load the other teachers");
+    }
+  }
+
+  async function removeTeacher() {
+    if (!teacher) return;
+    setIsRemoving(true);
+    try {
+      const res = await fetch(`/api/teachers/${teacher.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reassignTo: reassignTo || null }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        toast.error(typeof json?.error === "string" ? json.error : "Could not remove teacher");
+        return;
+      }
+      const moved: number = json.data.reassigned;
+      toast.success(
+        `${teacher.user.name ?? "Teacher"} was removed.` +
+          (moved > 0 ? ` ${moved} upcoming class${moved === 1 ? " was" : "es were"} reassigned.` : "")
+      );
+      router.push("/admin/teachers");
+    } catch {
+      toast.error("Could not remove teacher. Please try again.");
+    } finally {
+      setIsRemoving(false);
+    }
+  }
   const [invite, setInvite] = useState<InviteResult | null>(null);
 
   async function sendSignInLink() {
@@ -189,7 +239,58 @@ export default function AdminTeacherDetailPage() {
         <Button variant="outline" onClick={sendSignInLink} disabled={sendingLink}>
           {sendingLink ? "Sending…" : "Send sign-in link"}
         </Button>
+        <Button variant="destructive" onClick={openRemove}>
+          Remove teacher
+        </Button>
       </PageHeader>
+
+      <Modal
+        open={removing}
+        onClose={() => setRemoving(false)}
+        title={`Remove ${teacher.user.name ?? "this teacher"}?`}
+        description="They will no longer be able to sign in and will not appear on the website. Classes they have already taught, and their attendance records, stay on file under their name."
+        className="max-w-lg"
+      >
+        {teacher.upcomingCount > 0 && (
+          <div className="space-y-2">
+            <Label htmlFor="reassign-to">
+              Who takes over their {teacher.upcomingCount} upcoming class
+              {teacher.upcomingCount === 1 ? "" : "es"}?
+            </Label>
+            <select
+              id="reassign-to"
+              value={reassignTo}
+              onChange={(e) => setReassignTo(e.target.value)}
+              aria-describedby="reassign-to-hint"
+              className="h-8 w-full rounded-lg border border-input bg-white px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <option value="">Select a teacher</option>
+              {others.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+            <p id="reassign-to-hint" className="text-sm text-muted-foreground">
+              {others.length === 0
+                ? "There is no other teacher yet. Add one first, or delete these classes on the Schedule page."
+                : "You can change individual classes afterwards on the Schedule page."}
+            </p>
+          </div>
+        )}
+        <div className="mt-4 flex justify-end gap-2 border-t pt-4">
+          <Button variant="outline" onClick={() => setRemoving(false)} disabled={isRemoving}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={removeTeacher}
+            disabled={isRemoving || (teacher.upcomingCount > 0 && !reassignTo)}
+          >
+            {isRemoving ? "Removing…" : "Remove teacher"}
+          </Button>
+        </div>
+      </Modal>
       <InviteLinkNotice result={invite} onClose={() => setInvite(null)} />
 
       {/* Teacher Info Card */}

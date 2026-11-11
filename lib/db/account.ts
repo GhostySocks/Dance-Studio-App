@@ -49,9 +49,10 @@ export async function isAccountTokenValid(kind: AccountTokenKind, token: string)
   return !!record && record.identifier.startsWith(`${kind}:`) && record.expires >= new Date();
 }
 
+/** An account that can still be used. Removed staff get no reset links. */
 export async function getAccountByEmail(email: string) {
-  return prisma.user.findUnique({
-    where: { email: email.toLowerCase() },
+  return prisma.user.findFirst({
+    where: { email: email.toLowerCase(), disabledAt: null },
     select: { id: true, name: true, email: true, emailVerified: true },
   });
 }

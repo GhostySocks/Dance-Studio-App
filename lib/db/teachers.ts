@@ -10,16 +10,20 @@ export async function getTeachers({
   page?: number;
   perPage?: number;
 }) {
-  const where: Prisma.TeacherWhereInput = search
-    ? {
-        user: {
-          OR: [
-            { name: { contains: search, mode: "insensitive" } },
-            { email: { contains: search, mode: "insensitive" } },
-          ],
-        },
-      }
-    : {};
+  // Removed teachers keep their history but are no longer listed
+  const where: Prisma.TeacherWhereInput = {
+    user: {
+      disabledAt: null,
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: "insensitive" } },
+              { email: { contains: search, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    },
+  };
 
   const [teachers, total] = await Promise.all([
     prisma.teacher.findMany({
@@ -44,8 +48,8 @@ export async function getTeachers({
 }
 
 export async function getTeacherById(id: string) {
-  return prisma.teacher.findUnique({
-    where: { id },
+  return prisma.teacher.findFirst({
+    where: { id, user: { disabledAt: null } },
     include: {
       user: { select: { id: true, name: true, email: true, image: true } },
       sessions: {

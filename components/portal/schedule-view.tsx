@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Clock, MapPin, User } from "lucide-react";
 
+import { EmailTeacherButton } from "@/components/email-teacher-button";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -18,7 +19,7 @@ interface ScheduleEntry {
     startTime: string;
     endTime: string;
     template: { name: string; danceStyle: string | null };
-    teacher: { user: { name: string | null } } | null;
+    teacher: { id: string; user: { name: string | null } } | null;
     room: { name: string } | null;
   };
 }
@@ -114,11 +115,20 @@ export function ScheduleView({ description }: { description: string }) {
                               )}
                             </div>
                           </div>
-                          {entry.session.template.danceStyle && (
-                            <Badge variant="secondary">
-                              {entry.session.template.danceStyle}
-                            </Badge>
-                          )}
+                          <div className="flex flex-col items-end gap-2">
+                            {entry.session.template.danceStyle && (
+                              <Badge variant="secondary">
+                                {entry.session.template.danceStyle}
+                              </Badge>
+                            )}
+                            {entry.session.teacher?.user.name && (
+                              <EmailTeacherButton
+                                teacherId={entry.session.teacher.id}
+                                teacherName={entry.session.teacher.user.name}
+                                className={entry.session.template.name}
+                              />
+                            )}
+                          </div>
                         </div>
                       </CardContent>
                     </Card>

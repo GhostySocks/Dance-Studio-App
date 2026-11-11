@@ -36,6 +36,11 @@ export const newTeacherSchema = z.object({ name, email, ...profileFields });
 /** Admin adds another administrator. */
 export const newAdminSchema = z.object({ name, email });
 
+/** Removing a teacher: who takes over the classes they were still due to teach. */
+export const removeTeacherSchema = z.object({
+  reassignTo: z.string().min(1).max(64).nullable().optional(),
+});
+
 export type TeacherProfileFormData = z.infer<typeof teacherProfileFormSchema>;
 export type NewTeacherFormData = z.infer<typeof newTeacherSchema>;
 export type NewAdminFormData = z.infer<typeof newAdminSchema>;

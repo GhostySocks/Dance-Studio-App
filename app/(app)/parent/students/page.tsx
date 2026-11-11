@@ -6,6 +6,8 @@ import { toast } from "sonner";
 
 import { PageHeader } from "@/components/page-header";
 import { AddChildForm } from "@/components/forms/add-child-form";
+import { EmailTeacherButton } from "@/components/email-teacher-button";
+import { withinTeacherContactWindow } from "@/lib/teacher-contact";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LinkButton } from "@/components/link-button";
@@ -29,10 +31,27 @@ interface StudentData {
       startTime: string;
       endTime: string;
       template: { name: string; danceStyle: string | null };
-      teacher: { user: { name: string | null } } | null;
+      teacher: { id: string; user: { name: string | null } } | null;
       room: { name: string } | null;
     };
   }[];
+}
+
+/** Each current teacher of this child once, with the classes they teach them. */
+function teachersOf(student: StudentData) {
+  const byId = new Map<string, { id: string; name: string; classes: string[] }>();
+  for (const { session } of student.enrollments) {
+    // Only current classes: the server refuses older ones too
+    if (!session.teacher?.user.name || !withinTeacherContactWindow(session.startTime)) continue;
+    const entry = byId.get(session.teacher.id) ?? {
+      id: session.teacher.id,
+      name: session.teacher.user.name,
+      classes: [],
+    };
+    if (!entry.classes.includes(session.template.name)) entry.classes.push(session.template.name);
+    byId.set(session.teacher.id, entry);
+  }
+  return Array.from(byId.values());
 }
 
 export default function ParentStudentsPage() {
@@ -126,6 +145,24 @@ export default function ParentStudentsPage() {
                   <p className="text-sm text-muted-foreground">No active enrollments.</p>
                 ) : (
                   <div className="space-y-2">
+                    <ul className="mb-4 space-y-2">
+                      {teachersOf(student).map((teacher) => (
+                        <li
+                          key={teacher.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/50 px-3 py-2"
+                        >
+                          <p className="text-sm">
+                            <span className="font-medium">{teacher.name}</span>
+                            <span className="text-muted-foreground"> · {teacher.classes.join(", ")}</span>
+                          </p>
+                          <EmailTeacherButton
+                            teacherId={teacher.id}
+                            teacherName={teacher.name}
+                            className={teacher.classes.join(" and ")}
+                          />
+                        </li>
+                      ))}
+                    </ul>
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
                       Active Classes ({student.enrollments.length})
                     </p>

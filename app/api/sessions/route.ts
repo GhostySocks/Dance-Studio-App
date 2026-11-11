@@ -65,8 +65,11 @@ export async function POST(req: NextRequest) {
         weekCount: data.weekCount,
       });
     } else {
+      // weekCount only applies to recurring classes; it is not a column
+      const { weekCount: _weekCount, ...single } = data;
+      void _weekCount;
       result = await createClassSession({
-        ...data,
+        ...single,
         startTime,
         endTime,
       });

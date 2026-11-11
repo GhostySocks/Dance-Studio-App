@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { requireAdmin } from "@/lib/api-auth";
+import { countUpcomingSessions, removeTeacher } from "@/lib/db/staff";
 import { getTeacherById, updateTeacher } from "@/lib/db/teachers";
+import { removeTeacherSchema } from "@/lib/validations/staff";
 import { parseSpecialties, teacherProfileFormSchema } from "@/lib/validations/staff";
 
 export async function GET(
@@ -23,7 +26,8 @@ export async function GET(
       return NextResponse.json({ error: "Teacher not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ data: teacher });
+    const upcomingCount = await countUpcomingSessions(teacher.id);
+    return NextResponse.json({ data: { ...teacher, upcomingCount } });
   } catch (error) {
     console.error("GET /api/teachers/[id] error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -59,6 +63,43 @@ export async function PUT(
     return NextResponse.json({ data: teacher });
   } catch (error) {
     console.error("PUT /api/teachers/[id] error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+/**
+ * Removes a teacher. Classes they were still due to teach are handed to
+ * `reassignTo`; their past classes stay on record under their name.
+ */
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const { session, response } = await requireAdmin();
+    if (response) return response;
+
+    const parsed = removeTeacherSchema.safeParse(await req.json().catch(() => ({})));
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    }
+
+    const result = await removeTeacher(params.id, parsed.data.reassignTo ?? null, session.user.id);
+    switch (result.status) {
+      case "not-found":
+        return NextResponse.json({ error: "Teacher not found" }, { status: 404 });
+      case "needs-reassign":
+        return NextResponse.json(
+          { error: "Choose a teacher to take over their upcoming classes." },
+          { status: 400 }
+        );
+      case "bad-reassign":
+        return NextResponse.json(
+          { error: "Choose a different, current teacher to take over the classes." },
+          { status: 400 }
+        );
+      default:
+        return NextResponse.json({ data: { removed: true, reassigned: result.reassigned } });
+    }
+  } catch (error) {
+    console.error("DELETE /api/teachers/[id] error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

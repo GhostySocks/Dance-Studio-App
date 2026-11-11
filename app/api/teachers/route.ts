@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { requireAdmin } from "@/lib/api-auth";
-import { isEmailRegistered } from "@/lib/db/registration";
-import { createTeacherAccount } from "@/lib/db/staff";
+import { createTeacherAccount, findAccountByEmail, reactivateTeacher } from "@/lib/db/staff";
 import { getTeachers } from "@/lib/db/teachers";
 import { EMAIL_IN_USE, inviteStaff, isDuplicateEmail } from "@/lib/staff-api";
 import { newTeacherSchema, parseSpecialties } from "@/lib/validations/staff";
@@ -45,16 +44,22 @@ export async function POST(req: NextRequest) {
       );
     }
     const { specialties, ...data } = parsed.data;
-    if (await isEmailRegistered(data.email)) {
-      return NextResponse.json({ error: EMAIL_IN_USE }, { status: 409 });
+    const profile = { ...data, specialties: parseSpecialties(specialties) };
+
+    const existing = await findAccountByEmail(data.email);
+    if (existing) {
+      // A teacher who was removed earlier comes back with their history
+      if (!(existing.disabledAt && existing.role === "TEACHER" && existing.teacher)) {
+        return NextResponse.json({ error: EMAIL_IN_USE }, { status: 409 });
+      }
+      const restored = await reactivateTeacher(existing.id, profile, session.user.id);
+      const invite = await inviteStaff(restored.user, "a teacher");
+      return NextResponse.json({ data: { id: restored.teacherId, ...invite } }, { status: 201 });
     }
 
     let created;
     try {
-      created = await createTeacherAccount(
-        { ...data, specialties: parseSpecialties(specialties) },
-        session.user.id
-      );
+      created = await createTeacherAccount(profile, session.user.id);
     } catch (error) {
       if (isDuplicateEmail(error)) {
         return NextResponse.json({ error: EMAIL_IN_USE }, { status: 409 });

@@ -127,6 +127,9 @@ model User {
   image         String?
   passwordHash  String?
   role          UserRole   @default(PARENT)
+  /// Set when an admin removes a staff member: they can no longer sign in, but their
+  /// history (classes taught, audit trail) is kept.
+  disabledAt    DateTime?
   accounts      Account[]
   sessions      Session[]
   student       Student?

@@ -200,7 +200,14 @@ Follow these on every file, every session, without exception.
 - Teachers and administrators are created by an admin (Teachers page; Settings → Administrators), never through public sign-up. The role is fixed by the endpoint (`POST /api/teachers` → TEACHER, `POST /api/admins` → ADMIN); nothing in the request can change it.
 - Staff are created **without a password** and get a single-use, 7-day set-password link (`sendStaffInvite`, which reuses the password-reset token). An account with no password cannot sign in.
 - The link is returned to the admin only when the email could not be sent (no email provider), so they can pass it on; never return it otherwise.
-- There is no UI yet to remove or demote a staff member.
+- **Removing staff disables the account, it does not delete it** (`User.disabledAt`; `removeTeacher` / `removeAdmin` in `lib/db/staff.ts`), so classes taught and the audit trail keep the name. Disabled accounts cannot sign in, get no reset links, and are filtered out of every staff list and the public site. Any new query that lists teachers or admins must filter `disabledAt: null`.
+- A teacher with upcoming classes can only be removed by handing those classes to another current teacher. An admin cannot remove themself, and a SUPER_ADMIN cannot be removed.
+- Adding a removed person again with the same email re-enables the same account.
+- **Sessions are re-checked on every request** (`jwt` callback → `lib/account-status.ts`, cached 15 s): a removed or disabled account is signed out at once, and role changes take effect without signing in again. `middleware.ts` only reads the cookie, so API routes must keep calling `getServerSession`.
+
+### Email your teacher
+- Parents and adult students message a teacher through `POST /api/portal/teacher-messages`; the server looks up the teacher and sends the email with reply-to set to the sender. **A teacher email address must never be sent to a parent or student browser** (portal queries select the teacher `id` and name only).
+- Allowed only for teachers of the sender own students current classes (upcoming, or within `TEACHER_CONTACT_DAYS`, in `lib/teacher-contact.ts`, which the pages also use to decide whether to show the button). Rate limited per sender. The message text is not stored; an AuditLog row records that one was sent.
 
 ### Accessibility
 - Dialogs use `components/modal.tsx` (`Modal`): labelled, Escape to close, focus trapped and restored. Do not hand-roll overlay divs.

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireAdmin } from "@/lib/api-auth";
-import { isEmailRegistered } from "@/lib/db/registration";
-import { createAdminAccount, getAdmins } from "@/lib/db/staff";
+import { createAdminAccount, findAccountByEmail, getAdmins, reactivateAdmin } from "@/lib/db/staff";
 import { EMAIL_IN_USE, inviteStaff, isDuplicateEmail } from "@/lib/staff-api";
 import { newAdminSchema } from "@/lib/validations/staff";
 
@@ -32,8 +31,15 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    if (await isEmailRegistered(parsed.data.email)) {
-      return NextResponse.json({ error: EMAIL_IN_USE }, { status: 409 });
+    const existing = await findAccountByEmail(parsed.data.email);
+    if (existing) {
+      // An administrator who was removed earlier is brought back
+      if (!(existing.disabledAt && existing.role === "ADMIN")) {
+        return NextResponse.json({ error: EMAIL_IN_USE }, { status: 409 });
+      }
+      const restored = await reactivateAdmin(existing.id, parsed.data, session.user.id);
+      const invite = await inviteStaff(restored.user, "an administrator");
+      return NextResponse.json({ data: { id: restored.user.id, ...invite } }, { status: 201 });
     }
 
     let created;

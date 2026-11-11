@@ -153,7 +153,7 @@ export async function getParentStudents(userId: string) {
           session: {
             include: {
               template: { select: { name: true, danceStyle: true } },
-              teacher: { select: { user: { select: { name: true } } } },
+              teacher: { select: { id: true, user: { select: { name: true } } } },
               room: { select: { name: true } },
             },
           },
@@ -176,7 +176,7 @@ export async function getParentSchedule(userId: string) {
       session: {
         include: {
           template: { select: { name: true, danceStyle: true } },
-          teacher: { select: { user: { select: { name: true } } } },
+          teacher: { select: { id: true, user: { select: { name: true } } } },
           room: { select: { name: true } },
         },
       },

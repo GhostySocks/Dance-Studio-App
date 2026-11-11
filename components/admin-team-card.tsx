@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Plus } from "lucide-react";
@@ -116,6 +117,29 @@ export function AdminTeamCard() {
   const [adding, setAdding] = useState(false);
   const [invite, setInvite] = useState<InviteResult | null>(null);
   const [sendingTo, setSendingTo] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<Admin | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
+  const { data: session } = useSession();
+  const myId = session?.user?.id;
+
+  async function removeAdmin() {
+    if (!removing) return;
+    setIsRemoving(true);
+    try {
+      const res = await fetch(`/api/admins/${removing.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        toast.error(await readError(res, "Could not remove administrator"));
+      } else {
+        toast.success(`${removing.name} is no longer an administrator.`);
+        load();
+      }
+      setRemoving(null);
+    } catch {
+      toast.error("Could not remove administrator. Please try again.");
+    } finally {
+      setIsRemoving(false);
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -175,17 +199,29 @@ export function AdminTeamCard() {
                   </p>
                   <p className="text-xs text-muted-foreground">{admin.email}</p>
                 </div>
-                {!admin.hasPassword && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={sendingTo === admin.id}
-                    onClick={() => sendLink(admin)}
-                  >
-                    {sendingTo === admin.id ? "Sending…" : "Resend invitation"}
-                    <span className="sr-only"> to {admin.name}</span>
-                  </Button>
-                )}
+                <div className="flex gap-2">
+                  {!admin.hasPassword && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={sendingTo === admin.id}
+                      onClick={() => sendLink(admin)}
+                    >
+                      {sendingTo === admin.id ? "Sending…" : "Resend invitation"}
+                      <span className="sr-only"> to {admin.name}</span>
+                    </Button>
+                  )}
+                  {admin.id === myId ? (
+                    <Badge variant="outline">You</Badge>
+                  ) : (
+                    admin.role !== "SUPER_ADMIN" && (
+                      <Button variant="destructive" size="sm" onClick={() => setRemoving(admin)}>
+                        Remove
+                        <span className="sr-only"> {admin.name}</span>
+                      </Button>
+                    )
+                  )}
+                </div>
               </li>
             ))}
           </ul>
@@ -211,6 +247,24 @@ export function AdminTeamCard() {
             load();
           }}
         />
+      </Modal>
+
+      <Modal
+        open={!!removing}
+        onClose={() => setRemoving(null)}
+        title={`Remove ${removing?.name ?? "administrator"}?`}
+        description="They will be signed out and will no longer be able to sign in. You can add them again later with the same email address."
+        className="max-w-md"
+      >
+        <div className="flex justify-end gap-2 border-t pt-4">
+          <Button variant="outline" onClick={() => setRemoving(null)} disabled={isRemoving}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={removeAdmin} disabled={isRemoving}>
+            {isRemoving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+            Remove administrator
+          </Button>
+        </div>
       </Modal>
 
       <InviteLinkNotice result={invite} onClose={() => setInvite(null)} />

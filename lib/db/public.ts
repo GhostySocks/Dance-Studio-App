@@ -136,6 +136,7 @@ export const getPublicClass = cache(async function getPublicClass(id: string) {
 
 export async function getPublicTeachers() {
   const teachers = await prisma.teacher.findMany({
+    where: { user: { disabledAt: null } },
     select: {
       id: true,
       bio: true,

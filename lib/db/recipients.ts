@@ -22,7 +22,7 @@ export async function getStudioInfo() {
 
 export async function getAdminEmails(): Promise<string[]> {
   const admins = await prisma.user.findMany({
-    where: { role: { in: ["ADMIN", "SUPER_ADMIN"] } },
+    where: { role: { in: ["ADMIN", "SUPER_ADMIN"] }, disabledAt: null },
     select: { email: true },
   });
   return unique(admins.map((a) => a.email));

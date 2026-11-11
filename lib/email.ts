@@ -4,6 +4,7 @@ import type { ReactElement } from "react";
 import EnrollmentConfirmationEmail from "@/emails/enrollment-confirmation";
 import InvoiceEmail, { type InvoiceEmailProps } from "@/emails/invoice";
 import AdminNoticeEmail from "@/emails/admin-notice";
+import TeacherMessageEmail from "@/emails/teacher-message";
 import RegistrationConfirmationEmail from "@/emails/registration-confirmation";
 import { getRegistrationEmailContext } from "@/lib/db/registrations";
 import { PLAN_LABELS, PLAN_UNITS } from "@/lib/registration-billing";
@@ -37,10 +38,13 @@ export async function sendEmail({
   to,
   subject,
   react,
+  replyTo,
 }: {
   to: string[];
   subject: string;
   react: ReactElement;
+  /** Where replies should go, when not back to the studio. */
+  replyTo?: string;
 }): Promise<{ sent: boolean }> {
   if (to.length === 0) return { sent: false };
 
@@ -49,7 +53,7 @@ export async function sendEmail({
   if (!resend || !from) return { sent: false };
 
   try {
-    const { error } = await resend.emails.send({ from, to, subject, react });
+    const { error } = await resend.emails.send({ from, to, subject, react, replyTo });
     if (error) {
       console.error(`Email "${subject}" failed:`, error.message);
       return { sent: false };
@@ -275,5 +279,37 @@ export async function sendStaffInvite(user: { email: string; name: string }, rol
   } catch (error) {
     console.error("sendStaffInvite failed:", error);
     return { sent: false, url };
+  }
+}
+
+/** Delivers a parent's or student's message to their teacher. Replies go to the sender. */
+export async function sendTeacherMessage(
+  context: {
+    sender: { name: string; email: string };
+    teacher: { name: string; email: string };
+    links: string[];
+  },
+  subject: string,
+  message: string
+) {
+  try {
+    const studio = await getStudioInfo();
+    return await sendEmail({
+      to: [context.teacher.email],
+      replyTo: context.sender.email,
+      subject: `${subject} — from ${context.sender.name}`,
+      react: TeacherMessageEmail({
+        studioName: studio.name,
+        teacherName: context.teacher.name,
+        senderName: context.sender.name,
+        senderEmail: context.sender.email,
+        links: context.links,
+        subject,
+        message,
+      }),
+    });
+  } catch (error) {
+    console.error("sendTeacherMessage failed:", error);
+    return { sent: false };
   }
 }
