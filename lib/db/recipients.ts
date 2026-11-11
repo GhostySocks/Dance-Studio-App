@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { cachedStudio } from "@/lib/studio-cache";
 
 function unique(emails: (string | null | undefined)[]): string[] {
   return Array.from(
@@ -7,14 +8,16 @@ function unique(emails: (string | null | undefined)[]): string[] {
 }
 
 export async function getStudioInfo() {
-  const studio = await prisma.studioProfile.findFirst({
-    select: { name: true, timezone: true, email: true },
+  return cachedStudio("info", async () => {
+    const studio = await prisma.studioProfile.findFirst({
+      select: { name: true, timezone: true, email: true },
+    });
+    return {
+      name: studio?.name ?? "Dance Studio",
+      timezone: studio?.timezone ?? "America/New_York",
+      email: studio?.email ?? null,
+    };
   });
-  return {
-    name: studio?.name ?? "Dance Studio",
-    timezone: studio?.timezone ?? "America/New_York",
-    email: studio?.email ?? null,
-  };
 }
 
 export async function getAdminEmails(): Promise<string[]> {

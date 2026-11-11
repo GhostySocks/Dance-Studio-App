@@ -157,6 +157,8 @@ Follow these on every file, every session, without exception.
 ### Database Access
 - **All Prisma calls happen server-side only** — in Server Components, Server Actions, or API Route Handlers.
 - Never import Prisma in a client component.
+- **Database round trips are the main cost of a request** (each is roughly 20 ms from a dev machine, more than the query itself). So: `relationJoins` is enabled in `schema.prisma`, which loads `include`/nested `select` in one JOINed query instead of one query per relation; run independent queries with `Promise.all`; never query inside a loop (fetch once, group in memory); and wrap per-request lookups used by a layout, page and metadata in React `cache()`.
+- The studio profile is cached in memory for 60 seconds (`lib/studio-cache.ts`) and cleared when settings are saved. Read it through `getStudioInfo()` / `getPublicStudio()`, not directly.
 - The Prisma client caps its pool at 5 connections (`lib/prisma.ts`) because the Supabase session pooler allows 15 in total.
 - All DB access functions live in `lib/db/*.ts`. API routes call these functions; they do not contain raw Prisma queries themselves.
 - Always use `select` or `include` explicitly — avoid fetching entire models when only a subset is needed.

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { clearStudioCache } from "@/lib/studio-cache";
 
 const settingsSelect = {
   id: true,
@@ -58,6 +59,8 @@ export async function updateStudioSettings(
         data: { ...values, slug: slugify(data.name) },
         select: settingsSelect,
       });
+
+  clearStudioCache();
 
   await prisma.auditLog.create({
     data: {

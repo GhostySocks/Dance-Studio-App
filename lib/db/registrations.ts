@@ -40,30 +40,30 @@ export async function getRegistrationOptions(templateId: string) {
 
   const priceOf = (plan: BillingPlan) => template.prices.find((p) => p.plan === plan)?.priceCents;
 
+  // Upcoming dates of this class, fetched once and counted per term in memory
+  const horizon = terms.reduce(
+    (latest, t) => Math.max(latest, t.endDate.getTime(), t.season?.endDate.getTime() ?? 0),
+    now.getTime()
+  );
+  const upcoming =
+    terms.length === 0
+      ? []
+      : (
+          await prisma.classSession.findMany({
+            where: { templateId, startTime: { gte: now, lte: new Date(horizon) } },
+            select: { startTime: true },
+            orderBy: { startTime: "asc" },
+          })
+        ).map((s) => s.startTime);
+  const within = (range: { startDate: Date; endDate: Date }) =>
+    upcoming.filter((start) => start >= range.startDate && start <= range.endDate);
+
   const options = [];
   for (const term of terms) {
-    const from = term.startDate > now ? term.startDate : now;
-    const [termDates, seasonDates, first] = await Promise.all([
-      prisma.classSession.count({
-        where: { templateId, startTime: { gte: from, lte: term.endDate } },
-      }),
-      term.season
-        ? prisma.classSession.count({
-            where: {
-              templateId,
-              startTime: {
-                gte: term.season.startDate > now ? term.season.startDate : now,
-                lte: term.season.endDate,
-              },
-            },
-          })
-        : 0,
-      prisma.classSession.findFirst({
-        where: { templateId, startTime: { gte: from, lte: term.endDate } },
-        select: { startTime: true },
-        orderBy: { startTime: "asc" },
-      }),
-    ]);
+    const termStarts = within(term);
+    const termDates = termStarts.length;
+    const seasonDates = term.season ? within(term.season).length : 0;
+    const first = termStarts[0] ?? null;
     if (termDates === 0) continue;
 
     const plans: { plan: TermPlan; priceCents: number; dates: number; covers: string }[] = [];
@@ -82,7 +82,7 @@ export async function getRegistrationOptions(templateId: string) {
       termName: term.name,
       startDate: term.startDate.toISOString(),
       endDate: term.endDate.toISOString(),
-      firstDate: first?.startTime.toISOString() ?? null,
+      firstDate: first?.toISOString() ?? null,
       dates: termDates,
       plans,
     });

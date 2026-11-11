@@ -1,4 +1,7 @@
+import { cache } from "react";
+
 import { prisma } from "@/lib/prisma";
+import { cachedStudio } from "@/lib/studio-cache";
 import type { Prisma } from "@prisma/client";
 
 /**
@@ -103,7 +106,8 @@ export async function getPublicClasses() {
   }));
 }
 
-export async function getPublicClass(id: string) {
+/** Cached per request: the page and its metadata both need it. */
+export const getPublicClass = cache(async function getPublicClass(id: string) {
   const template = await prisma.classTemplate.findFirst({
     where: { id, isActive: true },
     select: {
@@ -128,7 +132,7 @@ export async function getPublicClass(id: string) {
 
   const { sessions, ...rest } = template;
   return { ...rest, sessions: sessions.map(toPublicSession) };
-}
+});
 
 export async function getPublicTeachers() {
   const teachers = await prisma.teacher.findMany({
@@ -144,8 +148,10 @@ export async function getPublicTeachers() {
   return teachers.map(({ user, ...teacher }) => ({ ...teacher, name: user.name }));
 }
 
-export async function getPublicStudio() {
-  const studio = await prisma.studioProfile.findFirst({
+/** Cached per request: the layout, the page and its metadata all need it. */
+export const getPublicStudio = cache(async function getPublicStudio() {
+  const studio = await cachedStudio("public", () =>
+    prisma.studioProfile.findFirst({
     select: {
       name: true,
       timezone: true,
@@ -153,7 +159,8 @@ export async function getPublicStudio() {
       phone: true,
       email: true,
     },
-  });
+    })
+  );
   return {
     name: studio?.name ?? "Dance Studio",
     timezone: studio?.timezone ?? "America/New_York",
@@ -161,4 +168,4 @@ export async function getPublicStudio() {
     phone: studio?.phone ?? null,
     email: studio?.email ?? null,
   };
-}
+});
