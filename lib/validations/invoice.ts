@@ -10,6 +10,15 @@ export const generateInvoiceSchema = z.object({
   { message: "Either familyGroupId or studentId is required" }
 );
 
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date");
+
+export const generateAllInvoicesSchema = z
+  .object({ periodStart: day, periodEnd: day })
+  .refine((data) => data.periodEnd >= data.periodStart, {
+    message: "The period must end on or after the day it starts",
+    path: ["periodEnd"],
+  });
+
 export const invoiceStatusSchema = z.object({
   status: z.enum(["DRAFT", "SENT", "PAID", "OVERDUE", "VOID"]),
 });

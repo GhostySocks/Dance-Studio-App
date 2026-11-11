@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { toast } from "sonner";
-import { Plus, Send, CheckCircle, Ban, FileDown, Loader2 } from "lucide-react";
+import { Plus, Send, CheckCircle, Ban, FileDown, Files, Loader2 } from "lucide-react";
+
+import { GenerateAllInvoices } from "@/components/forms/generate-all-invoices";
 import dynamic from "next/dynamic";
 
 import { Modal } from "@/components/modal";
@@ -92,6 +94,7 @@ export default function BillingPage() {
   const [students, setStudents] = useState<Student[]>([]);
 
   const [generateOpen, setGenerateOpen] = useState(false);
+  const [generateAllOpen, setGenerateAllOpen] = useState(false);
   const [genType, setGenType] = useState<"family" | "student">("family");
   const [genTargetId, setGenTargetId] = useState("");
   const [genPeriodStart, setGenPeriodStart] = useState("");
@@ -307,11 +310,26 @@ export default function BillingPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Billing" description="Generate and manage invoices">
-        <Button onClick={openGenerateDialog}>
-          <Plus className="h-4 w-4 mr-2" />
-          Generate Invoice
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={openGenerateDialog}>
+            <Plus className="h-4 w-4 mr-2" />
+            One Invoice
+          </Button>
+          <Button onClick={() => setGenerateAllOpen(true)}>
+            <Files className="h-4 w-4 mr-2" />
+            Generate All Invoices
+          </Button>
+        </div>
       </PageHeader>
+
+      <GenerateAllInvoices
+        open={generateAllOpen}
+        onClose={() => setGenerateAllOpen(false)}
+        onGenerated={() => {
+          setPage(1);
+          fetchInvoices();
+        }}
+      />
 
       <div className="flex items-center gap-4">
         <StyledSelect

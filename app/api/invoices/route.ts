@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getInvoices, createInvoiceFromBilling } from "@/lib/db/invoices";
 import { generateInvoiceSchema } from "@/lib/validations/invoice";
+import { billingPeriod } from "@/lib/billing-period";
+import { getStudioInfo } from "@/lib/db/recipients";
 
 export async function GET(req: NextRequest) {
   try {
@@ -43,11 +45,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // The chosen days are studio calendar days, both included in full
+    const { timezone } = await getStudioInfo();
     const result = await createInvoiceFromBilling({
       familyGroupId: parsed.data.familyGroupId,
       studentId: parsed.data.studentId,
-      periodStart: new Date(parsed.data.periodStart),
-      periodEnd: new Date(parsed.data.periodEnd),
+      ...billingPeriod(timezone, parsed.data.periodStart, parsed.data.periodEnd),
     });
 
     if (!result.invoice) {

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { generateFamilyInvoice, generateStudentInvoice } from "@/lib/billing";
+import { mapWithLimit } from "@/lib/billing-period";
 
 export async function getInvoices({
   status,
@@ -112,6 +113,133 @@ export async function createInvoiceFromBilling({
   });
 
   return { invoice, message: "Invoice created successfully" };
+}
+
+export interface GenerateAllResult {
+  created: { id: string; billTo: string; totalCents: number }[];
+  /** Total of the invoices created, in cents. */
+  totalCents: number;
+  /** Skipped: they already have an invoice (not void) overlapping the period. */
+  alreadyInvoiced: string[];
+  /** Skipped: nothing fell due in the period. */
+  nothingToBill: number;
+  /** Could not be generated; the others were still created. */
+  failed: string[];
+}
+
+/** Invoices are generated a few at a time: the database pool is small (see lib/prisma.ts). */
+const GENERATE_CONCURRENCY = 3;
+
+/**
+ * Generates a DRAFT invoice for everyone with something to pay in the period:
+ * one invoice per family group covering all of its students, and one per student
+ * who is not in a family group. Anyone who already has an invoice overlapping the
+ * period (other than a void one) is skipped, so running it twice bills nobody twice.
+ */
+export async function generateAllInvoices({
+  periodStart,
+  periodEnd,
+  actorId,
+}: {
+  periodStart: Date;
+  periodEnd: Date;
+  actorId: string;
+}): Promise<GenerateAllResult> {
+  const billable: Prisma.StudentWhereInput = {
+    OR: [
+      { enrollments: { some: { status: "ACTIVE" } } },
+      { registrations: { some: { status: "ACTIVE" } } },
+    ],
+  };
+
+  const [families, students, existing] = await Promise.all([
+    prisma.familyGroup.findMany({
+      where: { students: { some: billable } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.student.findMany({
+      where: { familyGroupId: null, ...billable },
+      select: { id: true, firstName: true, lastName: true },
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+    }),
+    prisma.invoice.findMany({
+      where: {
+        status: { not: "VOID" },
+        periodStart: { lte: periodEnd },
+        periodEnd: { gte: periodStart },
+      },
+      select: { familyGroupId: true, studentId: true },
+    }),
+  ]);
+
+  const invoicedFamilies = new Set(existing.map((i) => i.familyGroupId).filter(Boolean));
+  const invoicedStudents = new Set(existing.map((i) => i.studentId).filter(Boolean));
+
+  const targets = [
+    ...families.map((f) => ({ billTo: f.name, familyGroupId: f.id, invoiced: invoicedFamilies.has(f.id) })),
+    ...students.map((s) => ({
+      billTo: `${s.firstName} ${s.lastName}`,
+      studentId: s.id,
+      invoiced: invoicedStudents.has(s.id),
+    })),
+  ];
+
+  const result: GenerateAllResult = {
+    created: [],
+    totalCents: 0,
+    alreadyInvoiced: targets.filter((t) => t.invoiced).map((t) => t.billTo),
+    nothingToBill: 0,
+    failed: [],
+  };
+
+  const outcomes = await mapWithLimit(
+    targets.filter((t) => !t.invoiced),
+    GENERATE_CONCURRENCY,
+    async (target) => {
+      try {
+        const { invoice } = await createInvoiceFromBilling({
+          familyGroupId: "familyGroupId" in target ? target.familyGroupId : undefined,
+          studentId: "studentId" in target ? target.studentId : undefined,
+          periodStart,
+          periodEnd,
+        });
+        return { target, invoice };
+      } catch (error) {
+        console.error(`Generating the invoice for ${target.billTo} failed:`, error);
+        return { target, invoice: undefined };
+      }
+    }
+  );
+
+  for (const { target, invoice } of outcomes) {
+    if (invoice === undefined) result.failed.push(target.billTo);
+    else if (invoice === null) result.nothingToBill += 1;
+    else {
+      result.created.push({ id: invoice.id, billTo: target.billTo, totalCents: invoice.totalCents });
+      result.totalCents += invoice.totalCents;
+    }
+  }
+
+  await prisma.auditLog.create({
+    data: {
+      actorId,
+      action: "INVOICES_GENERATED",
+      entityType: "Invoice",
+      entityId: "bulk",
+      meta: {
+        periodStart: periodStart.toISOString(),
+        periodEnd: periodEnd.toISOString(),
+        created: result.created.length,
+        totalCents: result.totalCents,
+        alreadyInvoiced: result.alreadyInvoiced.length,
+        nothingToBill: result.nothingToBill,
+        failed: result.failed.length,
+      },
+    },
+  });
+
+  return result;
 }
 
 export async function updateInvoiceStatus(
