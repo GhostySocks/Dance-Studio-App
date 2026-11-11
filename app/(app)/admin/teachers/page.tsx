@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ColumnDef } from "@tanstack/react-table";
-import { Eye, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { NewTeacherForm } from "@/components/forms/new-teacher-form";
 import { InviteLinkNotice, announceInvite, type InviteResult } from "@/components/invite-link-notice";
@@ -34,9 +34,9 @@ const columns: ColumnDef<Teacher, unknown>[] = [
     accessorKey: "user.name",
     header: "Name",
     cell: ({ row }) => (
-      <span className="font-medium">
-        {row.original.user.name ?? "—"}
-      </span>
+      <Link href={`/admin/teachers/${row.original.id}`} className="font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline">
+        {row.original.user.name ?? row.original.user.email}
+      </Link>
     ),
   },
   {
@@ -69,18 +69,6 @@ const columns: ColumnDef<Teacher, unknown>[] = [
     id: "upcomingClasses",
     header: "Upcoming Classes",
     cell: ({ row }) => row.original.sessions.length,
-  },
-  {
-    id: "actions",
-    header: "",
-    cell: ({ row }) => (
-      <Link href={`/admin/teachers/${row.original.id}`}>
-        <Button variant="ghost" size="sm">
-          <Eye className="mr-1 h-4 w-4" />
-          View
-        </Button>
-      </Link>
-    ),
   },
 ];
 

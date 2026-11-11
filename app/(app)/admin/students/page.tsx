@@ -2,7 +2,7 @@
 
 import type { z } from "zod";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ColumnDef } from "@tanstack/react-table";
@@ -56,7 +56,6 @@ interface Student {
 
 
 export default function StudentsPage() {
-  const router = useRouter();
 
   const [students, setStudents] = useState<Student[]>([]);
   const [totalPages, setTotalPages] = useState(1);
@@ -240,14 +239,9 @@ export default function StudentsPage() {
         accessorKey: "name",
         header: "Name",
         cell: ({ row }) => (
-          <button
-            className="font-medium text-left hover:underline"
-            onClick={() =>
-              router.push(`/admin/students/${row.original.id}`)
-            }
-          >
+          <Link href={`/admin/students/${row.original.id}`} className="font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline">
             {row.original.firstName} {row.original.lastName}
-          </button>
+          </Link>
         ),
       },
       {
@@ -315,7 +309,7 @@ export default function StudentsPage() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [router]
+    []
   );
 
   return (

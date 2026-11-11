@@ -180,6 +180,7 @@ Follow these on every file, every session, without exception.
 ### Public site
 - Public pages and the widget read data only through `lib/db/public.ts`. Those functions return class/session info and spot counts — never student, family or enrollment records.
 - Public pages are `force-dynamic` (set in `app/(public)/layout.tsx`) so availability is live and builds do not need the database.
+- `/schedule` has a List / Calendar toggle (`?view=calendar` opens on the calendar). Both views share the same filters. The calendar is a custom month grid (`ScheduleCalendar`, `lib/calendar-grid.ts`) that works on studio-timezone day strings; on phones each day shows a count instead of class names.
 - Dates on public pages are formatted in the studio timezone with the helpers in `lib/schedule-format.ts`.
 - `/api/register` only ever creates PARENT or STUDENT accounts; the role is decided on the server.
 - Role → landing page mapping lives in `lib/portal.ts` (`portalHome`).
@@ -230,6 +231,7 @@ Follow these on every file, every session, without exception.
 - shadcn/ui components are in `components/ui/` — do not modify them directly. Wrap them if customization is needed. (Exception already made: `Input` and `Textarea` use `forwardRef`, because on React 18 react-hook-form's `register()` needs the ref.)
 - For navigation that looks like a button use `components/link-button.tsx` (`LinkButton`), not `<Button render={<Link />}>`, so it stays a real link for screen readers.
 - All data tables must have pagination, search, and at least one filter. Use TanStack Table.
+- In a table, the row name (student, family, teacher) is the link to its detail page: a real `<Link>` styled `font-medium text-primary hover:underline`. Do not add a separate eye icon or "View" button for that.
 
 ### Auth & Permissions
 - Use `getServerSession(authOptions)` in every server component and API route that needs auth.

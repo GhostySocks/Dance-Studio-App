@@ -15,8 +15,24 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
+import Link from "next/link";
 import { Toaster } from "@/components/ui/sonner";
 import { formatCurrency, formatDate } from "@/lib/utils";
+
+/** One line per class, however many dates of it the student is booked into. */
+function classesOf(enrollments: FamilyDetail["students"][number]["enrollments"]) {
+  const byName = new Map<string, { name: string; danceStyle: string | null; count: number }>();
+  for (const { session } of enrollments) {
+    const entry = byName.get(session.template.name) ?? {
+      name: session.template.name,
+      danceStyle: session.template.danceStyle,
+      count: 0,
+    };
+    entry.count += 1;
+    byName.set(session.template.name, entry);
+  }
+  return Array.from(byName.values());
+}
 
 interface FamilyDetail {
   id: string;
@@ -29,11 +45,8 @@ interface FamilyDetail {
     enrollments: {
       id: string;
       status: string;
-      class: {
-        name: string;
-        danceStyle: {
-          name: string;
-        } | null;
+      session: {
+        template: { name: string; danceStyle: string | null };
       };
     }[];
   }[];
@@ -195,7 +208,12 @@ export default function FamilyDetailPage() {
               <Card key={student.id} size="sm">
                 <CardHeader>
                   <CardTitle>
-                    {student.firstName} {student.lastName}
+                    <Link
+                      href={`/admin/students/${student.id}`}
+                      className="text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline"
+                    >
+                      {student.firstName} {student.lastName}
+                    </Link>
                   </CardTitle>
                   {student.dateOfBirth && (
                     <CardDescription>
@@ -213,17 +231,15 @@ export default function FamilyDetailPage() {
                       <p className="text-xs font-medium uppercase text-muted-foreground">
                         Enrollments
                       </p>
-                      {student.enrollments.map((enrollment) => (
-                        <div
-                          key={enrollment.id}
-                          className="flex items-center justify-between text-sm"
-                        >
-                          <span>{enrollment.class.name}</span>
-                          {enrollment.class.danceStyle && (
-                            <Badge variant="secondary">
-                              {enrollment.class.danceStyle.name}
-                            </Badge>
-                          )}
+                      {classesOf(student.enrollments).map((cls) => (
+                        <div key={cls.name} className="flex items-center justify-between text-sm">
+                          <span>
+                            {cls.name}
+                            {cls.count > 1 && (
+                              <span className="text-muted-foreground"> · {cls.count} classes</span>
+                            )}
+                          </span>
+                          {cls.danceStyle && <Badge variant="secondary">{cls.danceStyle}</Badge>}
                         </div>
                       ))}
                     </div>

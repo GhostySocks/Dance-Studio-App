@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { CalendarDays, List, Search } from "lucide-react";
+
+import { ScheduleCalendar } from "@/components/public/schedule-calendar";
 
 import { SessionRow } from "@/components/public/session-row";
 import { Input } from "@/components/ui/input";
@@ -47,17 +49,64 @@ function FilterChips({
   );
 }
 
-/** Upcoming sessions grouped by day, with search and style/level filters. */
+export type ScheduleView = "list" | "calendar";
+
+function ViewToggle({ view, onChange }: { view: ScheduleView; onChange: (view: ScheduleView) => void }) {
+  const options = [
+    { value: "list", label: "List", icon: List },
+    { value: "calendar", label: "Calendar", icon: CalendarDays },
+  ] as const;
+  return (
+    <div role="group" aria-label="Schedule view" className="inline-flex rounded-full border border-border bg-white p-0.5">
+      {options.map(({ value, label, icon: Icon }) => (
+        <button
+          key={value}
+          type="button"
+          aria-pressed={view === value}
+          onClick={() => onChange(value)}
+          className={cn(
+            "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            view === value
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          )}
+        >
+          <Icon className="h-4 w-4" aria-hidden />
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Upcoming sessions with search and style/level filters, shown either as a list
+ * grouped by day or as a month calendar. The filters apply to both views.
+ */
 export function ScheduleBrowser({
   sessions,
   timeZone,
   compact = false,
+  initialView = "list",
 }: {
   sessions: PublicSession[];
   timeZone: string;
-  /** Hide search and filters (used by the embeddable widget). */
+  /** Hide search, filters and the view toggle (used by the embeddable widget). */
   compact?: boolean;
+  /** From the page URL (?view=calendar), so a link can open straight on the calendar. */
+  initialView?: ScheduleView;
 }) {
+  const [view, setView] = useState<ScheduleView>(initialView);
+
+  function changeView(next: ScheduleView) {
+    setView(next);
+    // Keep the choice in the address bar so it survives a refresh and can be shared
+    const url = new URL(window.location.href);
+    if (next === "calendar") url.searchParams.set("view", "calendar");
+    else url.searchParams.delete("view");
+    window.history.replaceState(null, "", url);
+  }
+
   const [search, setSearch] = useState("");
   const [style, setStyle] = useState<string | null>(null);
   const [level, setLevel] = useState<string | null>(null);
@@ -71,9 +120,9 @@ export function ScheduleBrowser({
     [sessions]
   );
 
-  const days = useMemo(() => {
+  const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    const filtered = sessions.filter(
+    return sessions.filter(
       (s) =>
         (!style || s.template.danceStyle === style) &&
         (!level || s.template.skillLevel === level) &&
@@ -81,8 +130,9 @@ export function ScheduleBrowser({
           s.template.name.toLowerCase().includes(term) ||
           s.teacherName.toLowerCase().includes(term))
     );
-    return groupByDay(filtered, timeZone);
-  }, [sessions, search, style, level, timeZone]);
+  }, [sessions, search, style, level]);
+
+  const days = useMemo(() => groupByDay(filtered, timeZone), [filtered, timeZone]);
 
   return (
     <div className="space-y-6">
@@ -107,7 +157,15 @@ export function ScheduleBrowser({
         </div>
       )}
 
-      {days.length === 0 ? (
+      {!compact && (
+        <div className="flex justify-end">
+          <ViewToggle view={view} onChange={changeView} />
+        </div>
+      )}
+
+      {view === "calendar" && !compact ? (
+        <ScheduleCalendar sessions={filtered} timeZone={timeZone} />
+      ) : days.length === 0 ? (
         <p className="rounded-2xl bg-white p-8 text-center text-muted-foreground shadow-sm">
           {sessions.length === 0
             ? "No upcoming classes are scheduled yet."

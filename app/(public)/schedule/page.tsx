@@ -8,8 +8,13 @@ export const metadata: Metadata = {
   description: "Upcoming dance classes, with live availability.",
 };
 
-export default async function SchedulePage() {
+export default async function SchedulePage({
+  searchParams,
+}: {
+  searchParams: { view?: string | string[] };
+}) {
   const [studio, sessions] = await Promise.all([getPublicStudio(), getPublicSchedule()]);
+  const initialView = searchParams.view === "calendar" ? "calendar" : "list";
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
@@ -18,7 +23,7 @@ export default async function SchedulePage() {
         Upcoming classes for the next eight weeks. Times are shown in the studio&apos;s local time.
       </p>
       <div className="mt-8">
-        <ScheduleBrowser sessions={sessions} timeZone={studio.timezone} />
+        <ScheduleBrowser sessions={sessions} timeZone={studio.timezone} initialView={initialView} />
       </div>
     </div>
   );

@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ColumnDef } from "@tanstack/react-table";
-import { Eye, Pencil, Trash2, Plus } from "lucide-react";
+import { Pencil, Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -54,7 +54,6 @@ interface Family {
 }
 
 export default function FamiliesPage() {
-  const router = useRouter();
   const [families, setFamilies] = useState<Family[]>([]);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -170,6 +169,11 @@ export default function FamiliesPage() {
       {
         accessorKey: "name",
         header: "Family Name",
+        cell: ({ row }) => (
+          <Link href={`/admin/families/${row.original.id}`} className="font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline">
+            {row.original.name}
+          </Link>
+        ),
       },
       {
         id: "students",
@@ -206,14 +210,6 @@ export default function FamiliesPage() {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => router.push(`/admin/families/${family.id}`)}
-                title="View" aria-label={`View ${family.name}`}
-              >
-                <Eye />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
                 onClick={() => openEditDialog(family)}
                 title="Edit" aria-label={`Edit ${family.name}`}
               >
@@ -233,7 +229,7 @@ export default function FamiliesPage() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [router]
+    []
   );
 
   return (
