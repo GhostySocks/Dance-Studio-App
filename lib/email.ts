@@ -4,6 +4,9 @@ import type { ReactElement } from "react";
 import EnrollmentConfirmationEmail from "@/emails/enrollment-confirmation";
 import InvoiceEmail, { type InvoiceEmailProps } from "@/emails/invoice";
 import AdminNoticeEmail from "@/emails/admin-notice";
+import RegistrationConfirmationEmail from "@/emails/registration-confirmation";
+import { getRegistrationEmailContext } from "@/lib/db/registrations";
+import { PLAN_LABELS, PLAN_UNITS } from "@/lib/registration-billing";
 import AccountLinkEmail, { type AccountLinkEmailProps } from "@/emails/account-link";
 import { createAccountToken } from "@/lib/db/account";
 import {
@@ -206,6 +209,44 @@ export async function sendVerificationEmail(email: string) {
     });
   } catch (error) {
     console.error("sendVerificationEmail failed:", error);
+    return { sent: false };
+  }
+}
+
+/** One email for a whole term registration, instead of one per class date. */
+export async function sendRegistrationConfirmation(registrationId: string) {
+  try {
+    const [ctx, studio] = await Promise.all([
+      getRegistrationEmailContext(registrationId),
+      getStudioInfo(),
+    ]);
+    if (!ctx || ctx.registration.status === "CANCELLED") return { sent: false };
+
+    const { registration } = ctx;
+    const studentName = `${registration.student.firstName} ${registration.student.lastName}`;
+    const className = registration.template.name;
+    const covers = registration.season?.name ?? registration.term?.name ?? "the term";
+    const confirmed = registration.enrollments.filter((e) => e.status === "ACTIVE");
+    const waitlisted = registration.enrollments.length - confirmed.length;
+    const first = confirmed[0]?.session.startTime ?? null;
+
+    return await sendEmail({
+      to: ctx.recipients,
+      subject: `Registration: ${studentName} — ${className} (${covers})`,
+      react: RegistrationConfirmationEmail({
+        studioName: studio.name,
+        recipientName: ctx.recipientName,
+        studentName,
+        className,
+        covers,
+        billing: `${PLAN_LABELS[registration.plan]} — ${formatCurrency(registration.priceCents)} ${PLAN_UNITS[registration.plan]}`,
+        confirmedDates: confirmed.length,
+        waitlistedDates: waitlisted,
+        firstDate: first ? formatDateTime(first, studio.timezone) : null,
+      }),
+    });
+  } catch (error) {
+    console.error("sendRegistrationConfirmation failed:", error);
     return { sent: false };
   }
 }

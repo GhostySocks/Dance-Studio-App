@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { registrationChoiceSchema } from "@/lib/validations/term";
+
 const dateString = z
   .string()
   .refine((v) => v === "" || (/^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v))), {
@@ -28,6 +30,8 @@ export const registrationSchema = z
     dateOfBirth: dateString,
     dancers: z.array(dancerSchema).max(8, "You can add up to 8 dancers"),
     sessionId: z.string().max(64).optional(),
+    /** Register for a whole term instead of a single date. */
+    termChoice: registrationChoiceSchema.optional(),
   })
   .superRefine((data, ctx) => {
     if (data.accountType === "PARENT" && data.dancers.length === 0) {

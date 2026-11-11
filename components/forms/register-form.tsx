@@ -31,12 +31,16 @@ function FieldError({ id, message }: { id: string; message?: string }) {
 
 export function RegisterForm({
   sessionId,
+  termChoice,
   className,
 }: {
-  /** The class picked on the schedule, if any. */
+  /** The class date picked on the schedule, if any. */
   sessionId?: string;
+  /** Or a whole-term registration picked on the class page. */
+  termChoice?: RegistrationFormData["termChoice"];
   className?: string;
 }) {
+  const hasSelection = !!sessionId || !!termChoice;
   const router = useRouter();
   const reduceMotion = useReducedMotion();
   const [formError, setFormError] = useState<string | null>(null);
@@ -53,6 +57,7 @@ export function RegisterForm({
       dateOfBirth: "",
       dancers: [emptyDancer],
       sessionId,
+      termChoice,
     },
   });
   const { register, handleSubmit, watch, setValue, control, formState } = form;
@@ -300,14 +305,16 @@ export function RegisterForm({
                       />
                     </div>
                   </div>
-                  {sessionId && (
+                  {hasSelection && (
                     <label className="mt-3 flex items-center gap-2 text-sm">
                       <input
                         type="checkbox"
                         className="h-4 w-4 rounded border-border accent-[hsl(var(--primary))]"
                         {...register(`dancers.${index}.enroll`)}
                       />
-                      Enroll this dancer in the selected class
+                      {termChoice
+                        ? "Register this dancer for the selected term"
+                        : "Enroll this dancer in the selected class"}
                     </label>
                   )}
                 </motion.div>
@@ -335,7 +342,7 @@ export function RegisterForm({
       <div className="flex flex-wrap items-center gap-4">
         <Button type="submit" disabled={isSubmitting} className="h-11 px-6 text-base">
           {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-          {isSubmitting ? "Creating account…" : sessionId ? "Create account and register" : "Create account"}
+          {isSubmitting ? "Creating account…" : hasSelection ? "Create account and register" : "Create account"}
         </Button>
         <p className="text-sm text-muted-foreground">
           Already have an account?{" "}

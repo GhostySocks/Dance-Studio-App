@@ -19,6 +19,8 @@ import {
   PanelLeft,
   UserCheck,
   Settings,
+  CalendarRange,
+  ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -36,7 +38,9 @@ const adminNav: NavItem[] = [
   { title: "Teachers", href: "/admin/teachers", icon: GraduationCap },
   { title: "Classes", href: "/admin/classes", icon: BookOpen },
   { title: "Rooms", href: "/admin/rooms", icon: DoorOpen },
+  { title: "Terms", href: "/admin/terms", icon: CalendarRange },
   { title: "Enrollments", href: "/admin/enrollments", icon: UserCheck },
+  { title: "Registrations", href: "/admin/registrations", icon: ClipboardList },
   { title: "Attendance", href: "/admin/attendance", icon: ClipboardCheck },
   { title: "Schedule", href: "/admin/schedule", icon: Calendar },
   { title: "Billing", href: "/admin/billing", icon: Receipt },

@@ -88,8 +88,11 @@ export async function createInvoiceFromBilling({
   const dueDate = new Date(periodEnd);
   dueDate.setDate(dueDate.getDate() + 30);
 
+  // Created together with the record of which registration instalments it bills,
+  // so an instalment can never end up on two invoices.
   const invoice = await prisma.invoice.create({
     data: {
+      registrationCharges: { create: billingResult.registrationCharges },
       studentId: studentId || null,
       familyGroupId: familyGroupId || null,
       periodStart,

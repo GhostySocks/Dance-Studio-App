@@ -35,8 +35,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Student not found" }, { status: 404 });
     }
 
-    if (!(await getPublicSession(sessionId))) {
+    const classSession = await getPublicSession(sessionId);
+    if (!classSession) {
       return NextResponse.json({ error: "That class is no longer available." }, { status: 404 });
+    }
+    if (!classSession.template.dropInEnabled) {
+      return NextResponse.json(
+        { error: "This class can only be booked for a whole term." },
+        { status: 400 }
+      );
     }
 
     const results = [];

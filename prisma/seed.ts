@@ -18,8 +18,11 @@ async function main() {
   await prisma.enrollment.deleteMany();
   await prisma.scholarship.deleteMany();
   await prisma.pricingRule.deleteMany();
+  await prisma.registration.deleteMany();
   await prisma.classSession.deleteMany();
   await prisma.classTemplate.deleteMany();
+  await prisma.term.deleteMany();
+  await prisma.season.deleteMany();
   await prisma.room.deleteMany();
   await prisma.student.deleteMany();
   await prisma.familyGroupGuardian.deleteMany();
@@ -426,6 +429,28 @@ async function main() {
   });
 
   console.log("Created 8 enrollments");
+
+  // A season and a term covering the next 8 weeks, with term prices on every class,
+  // so whole-term registration can be tried straight away
+  const termStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  const termEnd = new Date(termStart.getTime() + 8 * 7 * 24 * 60 * 60 * 1000);
+  const seasonEnd = new Date(Date.UTC(termStart.getUTCFullYear() + 1, termStart.getUTCMonth(), termStart.getUTCDate()));
+  const season = await prisma.season.create({
+    data: { name: "Current Season", startDate: termStart, endDate: seasonEnd },
+  });
+  await prisma.term.create({
+    data: { name: "Current Term", startDate: termStart, endDate: termEnd, seasonId: season.id },
+  });
+  const templates = await prisma.classTemplate.findMany({ select: { id: true, basePriceCents: true } });
+  await prisma.classPrice.createMany({
+    data: templates.flatMap((t) => [
+      { templateId: t.id, plan: "WEEKLY" as const, priceCents: Math.round(t.basePriceCents * 0.9) },
+      { templateId: t.id, plan: "MONTHLY" as const, priceCents: Math.round(t.basePriceCents * 3.4) },
+      { templateId: t.id, plan: "SEMESTER" as const, priceCents: Math.round(t.basePriceCents * 6.4) },
+      { templateId: t.id, plan: "ANNUAL" as const, priceCents: Math.round(t.basePriceCents * 30) },
+    ]),
+  });
+  console.log("Created 1 season, 1 term and term prices for every class");
 
   // Repeat each class weekly so the public schedule has something to show
   const extraSessions = await ensureUpcomingSessions(prisma, 8);

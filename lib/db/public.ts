@@ -18,6 +18,7 @@ const publicSessionSelect = {
       danceStyle: true,
       skillLevel: true,
       basePriceCents: true,
+      dropInEnabled: true,
     },
   },
   teacher: { select: { user: { select: { name: true } } } },
@@ -84,6 +85,8 @@ export async function getPublicClasses() {
       skillLevel: true,
       defaultDurationMins: true,
       basePriceCents: true,
+      dropInEnabled: true,
+      prices: { select: { plan: true, priceCents: true } },
       sessions: {
         where: { startTime: { gte: now } },
         select: { startTime: true },
@@ -111,6 +114,8 @@ export async function getPublicClass(id: string) {
       skillLevel: true,
       defaultDurationMins: true,
       basePriceCents: true,
+      dropInEnabled: true,
+      prices: { select: { plan: true, priceCents: true } },
       sessions: {
         where: { startTime: { gte: new Date() } },
         select: publicSessionSelect,

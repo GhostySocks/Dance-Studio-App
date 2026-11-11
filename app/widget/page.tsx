@@ -49,12 +49,20 @@ export default async function WidgetPage({
                     </p>
                   </div>
                   <a
-                    href={`/register?session=${session.id}`}
+                    href={
+                      session.template.dropInEnabled
+                        ? `/register?session=${session.id}`
+                        : `/classes/${session.template.id}#register`
+                    }
                     target="_blank"
                     rel="noopener"
                     className="rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    {session.spotsLeft > 0 ? "Register" : "Join waitlist"}
+                    {!session.template.dropInEnabled
+                      ? "Register for term"
+                      : session.spotsLeft > 0
+                        ? "Register"
+                        : "Join waitlist"}
                     <span className="sr-only"> for {session.template.name} (opens in a new tab)</span>
                   </a>
                 </li>

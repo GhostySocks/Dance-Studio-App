@@ -27,6 +27,7 @@ export async function getClassTemplates({
           where: { startTime: { gte: new Date() } },
           select: { id: true },
         },
+        prices: { select: { plan: true, priceCents: true } },
       },
       orderBy: { name: "asc" },
       skip: (page - 1) * perPage,
@@ -61,27 +62,69 @@ export async function getClassTemplateById(id: string) {
   });
 }
 
-export async function createClassTemplate(data: {
+type PlanPrices = Partial<Record<"WEEKLY" | "MONTHLY" | "SEMESTER" | "ANNUAL", number | null>>;
+const TERM_PLAN_KEYS = ["WEEKLY", "MONTHLY", "SEMESTER", "ANNUAL"] as const;
+
+/** Replaces a class's plan prices: a number sets the price, null stops offering the plan. */
+async function savePlanPrices(tx: Prisma.TransactionClient, templateId: string, prices: PlanPrices) {
+  for (const plan of TERM_PLAN_KEYS) {
+    const priceCents = prices[plan];
+    if (priceCents === undefined) continue;
+    if (priceCents === null) {
+      await tx.classPrice.deleteMany({ where: { templateId, plan } });
+    } else {
+      await tx.classPrice.upsert({
+        where: { templateId_plan: { templateId, plan } },
+        create: { templateId, plan, priceCents },
+        update: { priceCents },
+      });
+    }
+  }
+}
+
+export async function createClassTemplate({
+  prices,
+  ...data
+}: {
   name: string;
   description?: string | null;
   danceStyle?: string | null;
   skillLevel?: string | null;
   defaultDurationMins: number;
   basePriceCents: number;
+  dropInEnabled?: boolean;
+  prices?: PlanPrices;
 }) {
-  return prisma.classTemplate.create({ data });
+  return prisma.$transaction(async (tx) => {
+    const template = await tx.classTemplate.create({ data });
+    if (prices) await savePlanPrices(tx, template.id, prices);
+    return template;
+  });
 }
 
-export async function updateClassTemplate(id: string, data: {
-  name?: string;
-  description?: string | null;
-  danceStyle?: string | null;
-  skillLevel?: string | null;
-  defaultDurationMins?: number;
-  basePriceCents?: number;
-  isActive?: boolean;
-}) {
-  return prisma.classTemplate.update({ where: { id }, data });
+export async function updateClassTemplate(
+  id: string,
+  {
+    prices,
+    ...data
+  }: {
+    name?: string;
+    description?: string | null;
+    danceStyle?: string | null;
+    skillLevel?: string | null;
+    defaultDurationMins?: number;
+    basePriceCents?: number;
+    isActive?: boolean;
+    dropInEnabled?: boolean;
+    prices?: PlanPrices;
+  }
+) {
+  // Existing registrations keep the price they signed up at (Registration.priceCents)
+  return prisma.$transaction(async (tx) => {
+    const template = await tx.classTemplate.update({ where: { id }, data });
+    if (prices) await savePlanPrices(tx, id, prices);
+    return template;
+  });
 }
 
 export async function deleteClassTemplate(id: string) {

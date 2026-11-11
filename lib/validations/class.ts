@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const planPrice = z.number().int().min(0, "Price cannot be negative").max(10_000_000).nullable().optional();
+
 export const classTemplateSchema = z.object({
   name: z.string().min(1, "Class name is required").max(100),
   description: z.string().nullable().optional().or(z.literal("")),
@@ -7,6 +9,17 @@ export const classTemplateSchema = z.object({
   skillLevel: z.string().nullable().optional().or(z.literal("")),
   defaultDurationMins: z.coerce.number().int().min(1, "Duration must be at least 1 minute"),
   basePriceCents: z.coerce.number().int().min(0, "Price cannot be negative"),
+  /** Whether single dates can be booked at basePriceCents. */
+  dropInEnabled: z.boolean().optional(),
+  /** Price in cents per term plan; null or missing = not offered. */
+  prices: z
+    .object({
+      WEEKLY: planPrice,
+      MONTHLY: planPrice,
+      SEMESTER: planPrice,
+      ANNUAL: planPrice,
+    })
+    .optional(),
 });
 
 export type ClassTemplateFormData = z.input<typeof classTemplateSchema>;

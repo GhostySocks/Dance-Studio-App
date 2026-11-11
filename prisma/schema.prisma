@@ -58,6 +58,20 @@ enum LineItemType {
   FEE
 }
 
+/// How a class registration is paid for.
+enum BillingPlan {
+  PER_CLASS
+  WEEKLY
+  MONTHLY
+  SEMESTER
+  ANNUAL
+}
+
+enum RegistrationStatus {
+  ACTIVE
+  CANCELLED
+}
+
 enum DiscountType {
   PERCENT_OFF
   FIXED_PRICE
@@ -103,21 +117,21 @@ model VerificationToken {
 // ─── Core Models ─────────────────────────────────────────────────────────────
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
+  id            String     @id @default(cuid())
+  email         String     @unique
   emailVerified DateTime?
   name          String
   image         String?
   passwordHash  String?
-  role          UserRole  @default(PARENT)
+  role          UserRole   @default(PARENT)
   accounts      Account[]
   sessions      Session[]
   student       Student?
   guardian      Guardian?
   teacher       Teacher?
   auditLogs     AuditLog[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 }
 
 model StudioProfile {
@@ -136,29 +150,30 @@ model StudioProfile {
 }
 
 model Student {
-  id            String        @id @default(cuid())
-  firstName     String
-  lastName      String
-  dateOfBirth   DateTime?
-  photo         String?
-  email         String?
-  phone         String?
-  medicalNotes  String?
-  notes         String?
-  user          User?         @relation(fields: [userId], references: [id])
-  userId        String?       @unique
-  guardian      Guardian?     @relation(fields: [guardianId], references: [id])
-  guardianId    String?
-  familyGroup   FamilyGroup?  @relation(fields: [familyGroupId], references: [id])
-  familyGroupId String?
-  enrollments   Enrollment[]
-  scholarships  Scholarship[]
-  invoices      Invoice[]
-  stripeCustomerId      String?  @unique
+  id                    String         @id @default(cuid())
+  firstName             String
+  lastName              String
+  dateOfBirth           DateTime?
+  photo                 String?
+  email                 String?
+  phone                 String?
+  medicalNotes          String?
+  notes                 String?
+  user                  User?          @relation(fields: [userId], references: [id])
+  userId                String?        @unique
+  guardian              Guardian?      @relation(fields: [guardianId], references: [id])
+  guardianId            String?
+  familyGroup           FamilyGroup?   @relation(fields: [familyGroupId], references: [id])
+  familyGroupId         String?
+  enrollments           Enrollment[]
+  registrations         Registration[]
+  scholarships          Scholarship[]
+  invoices              Invoice[]
+  stripeCustomerId      String?        @unique
   stripePaymentMethodId String?
-  autoPayEnabled        Boolean  @default(false)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  autoPayEnabled        Boolean        @default(false)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
 }
 
 model Guardian {
@@ -174,18 +189,18 @@ model Guardian {
 }
 
 model FamilyGroup {
-  id           String                @id @default(cuid())
-  name         String
-  students     Student[]
-  guardians    FamilyGroupGuardian[]
-  invoices     Invoice[]
-  scholarships Scholarship[]
-  pricingRules PricingRule[]
-  stripeCustomerId      String?  @unique
+  id                    String                @id @default(cuid())
+  name                  String
+  students              Student[]
+  guardians             FamilyGroupGuardian[]
+  invoices              Invoice[]
+  scholarships          Scholarship[]
+  pricingRules          PricingRule[]
+  stripeCustomerId      String?               @unique
   stripePaymentMethodId String?
-  autoPayEnabled        Boolean  @default(false)
-  createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
+  autoPayEnabled        Boolean               @default(false)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
 }
 
 model FamilyGroupGuardian {
@@ -230,7 +245,11 @@ model ClassTemplate {
   defaultDurationMins Int
   basePriceCents      Int
   isActive            Boolean        @default(true)
+  /// Whether single dates can be booked at basePriceCents
+  dropInEnabled       Boolean        @default(true)
   sessions            ClassSession[]
+  prices              ClassPrice[]
+  registrations       Registration[]
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 }
@@ -254,16 +273,102 @@ model ClassSession {
   updatedAt   DateTime      @updatedAt
 }
 
+/// The studio year (e.g. Sep 2026 to Jun 2027). Annual registrations cover a season.
+model Season {
+  id            String         @id @default(cuid())
+  name          String
+  startDate     DateTime
+  endDate       DateTime
+  terms         Term[]
+  registrations Registration[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+/// A semester or session block. A class date belongs to the term its start time falls in.
+model Term {
+  id            String         @id @default(cuid())
+  name          String
+  startDate     DateTime
+  endDate       DateTime
+  season        Season?        @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+  seasonId      String?
+  registrations Registration[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+/// Price of a class under one billing plan. No row means the plan is not offered.
+/// (The per-class price is ClassTemplate.basePriceCents.)
+model ClassPrice {
+  id         String        @id @default(cuid())
+  template   ClassTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateId String
+  plan       BillingPlan
+  priceCents Int
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@unique([templateId, plan])
+}
+
+/// A student signed up for every date of a class in a term (or season, for ANNUAL).
+model Registration {
+  id          String               @id @default(cuid())
+  student     Student              @relation(fields: [studentId], references: [id])
+  studentId   String
+  template    ClassTemplate        @relation(fields: [templateId], references: [id])
+  templateId  String
+  term        Term?                @relation(fields: [termId], references: [id])
+  termId      String?
+  season      Season?              @relation(fields: [seasonId], references: [id])
+  seasonId    String?
+  plan        BillingPlan
+  /// Plan price at sign-up, so later price changes do not alter existing registrations
+  priceCents  Int
+  /// The dates this registration covers
+  startDate   DateTime
+  endDate     DateTime
+  status      RegistrationStatus   @default(ACTIVE)
+  cancelledAt DateTime?
+  enrollments Enrollment[]
+  charges     RegistrationCharge[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([studentId])
+  @@index([templateId])
+}
+
+/// One billed instalment of a registration (a week, a month, or the whole term).
+/// Recorded when it is put on an invoice so it is never billed twice.
+model RegistrationCharge {
+  id             String       @id @default(cuid())
+  registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  registrationId String
+  /// "full", a month "2026-11", or the Monday of a week "2026-11-09"
+  periodKey      String
+  amountCents    Int
+  invoice        Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceId      String
+  createdAt      DateTime     @default(now())
+
+  @@index([registrationId, periodKey])
+}
+
 model Enrollment {
-  id         String           @id @default(cuid())
-  student    Student          @relation(fields: [studentId], references: [id])
-  studentId  String
-  session    ClassSession     @relation(fields: [sessionId], references: [id])
-  sessionId  String
-  status     EnrollmentStatus @default(ACTIVE)
-  attendance Attendance[]
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
+  id             String           @id @default(cuid())
+  student        Student          @relation(fields: [studentId], references: [id])
+  studentId      String
+  session        ClassSession     @relation(fields: [sessionId], references: [id])
+  sessionId      String
+  status         EnrollmentStatus @default(ACTIVE)
+  /// Set when this date was booked as part of a term registration (billed by plan, not per class)
+  registration   Registration?    @relation(fields: [registrationId], references: [id], onDelete: SetNull)
+  registrationId String?
+  attendance     Attendance[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
   @@unique([studentId, sessionId])
 }
@@ -284,20 +389,21 @@ model Attendance {
 }
 
 model Invoice {
-  id            String            @id @default(cuid())
-  student       Student?          @relation(fields: [studentId], references: [id])
-  studentId     String?
-  familyGroup   FamilyGroup?      @relation(fields: [familyGroupId], references: [id])
-  familyGroupId String?
-  periodStart   DateTime
-  periodEnd     DateTime
-  dueDate       DateTime?
-  status        InvoiceStatus     @default(DRAFT)
-  totalCents    Int
-  lineItems     InvoiceLineItem[]
-  payments      Payment[]
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  id                  String               @id @default(cuid())
+  student             Student?             @relation(fields: [studentId], references: [id])
+  studentId           String?
+  familyGroup         FamilyGroup?         @relation(fields: [familyGroupId], references: [id])
+  familyGroupId       String?
+  periodStart         DateTime
+  periodEnd           DateTime
+  dueDate             DateTime?
+  status              InvoiceStatus        @default(DRAFT)
+  totalCents          Int
+  lineItems           InvoiceLineItem[]
+  payments            Payment[]
+  registrationCharges RegistrationCharge[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 }
 
 model InvoiceLineItem {

@@ -9,7 +9,12 @@ import {
   createStudentAccount,
   isEmailRegistered,
 } from "@/lib/db/registration";
-import { sendEnrollmentConfirmation, sendVerificationEmail } from "@/lib/email";
+import { createRegistration, getRegistrationOptions } from "@/lib/db/registrations";
+import {
+  sendEnrollmentConfirmation,
+  sendRegistrationConfirmation,
+  sendVerificationEmail,
+} from "@/lib/email";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { registrationSchema } from "@/lib/validations/registration";
 
@@ -37,11 +42,25 @@ export async function POST(req: NextRequest) {
     }
     const data = parsed.data;
 
-    if (data.sessionId && !(await getPublicSession(data.sessionId))) {
-      return NextResponse.json(
-        { error: "That class is no longer available. Please pick another one." },
-        { status: 400 }
-      );
+    if (data.sessionId) {
+      const classSession = await getPublicSession(data.sessionId);
+      if (!classSession || !classSession.template.dropInEnabled) {
+        return NextResponse.json(
+          { error: "That class is no longer available. Please pick another one." },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (data.termChoice) {
+      const options = await getRegistrationOptions(data.termChoice.templateId);
+      const term = options?.terms.find((t) => t.termId === data.termChoice?.termId);
+      if (!term?.plans.some((p) => p.plan === data.termChoice?.plan)) {
+        return NextResponse.json(
+          { error: "That registration option is no longer available. Please pick another one." },
+          { status: 400 }
+        );
+      }
     }
 
     if (await isEmailRegistered(data.email)) {
@@ -82,6 +101,27 @@ export async function POST(req: NextRequest) {
           if (result.waitlist) waitlisted += 1;
           else enrolled += 1;
           await sendEnrollmentConfirmation(result.enrollment.id);
+        }
+      }
+    }
+
+    // Or register for the whole term
+    if (data.termChoice) {
+      const toRegister =
+        data.accountType === "PARENT"
+          ? account.studentIds.filter((_, i) => data.dancers[i]?.enroll)
+          : account.studentIds;
+
+      for (const studentId of toRegister) {
+        const result = await createRegistration({
+          studentId,
+          ...data.termChoice,
+          actorId: account.userId,
+        });
+        if (result.ok) {
+          if (result.enrolled > 0) enrolled += 1;
+          else waitlisted += 1;
+          await sendRegistrationConfirmation(result.registrationId);
         }
       }
     }

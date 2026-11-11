@@ -77,10 +77,13 @@ export async function enrollStudent({
   studentId,
   sessionId,
   force = false,
+  registrationId,
 }: {
   studentId: string;
   sessionId: string;
   force?: boolean;
+  /** Set when the date is booked as part of a term registration (billed by plan). */
+  registrationId?: string;
 }): Promise<{
   success: boolean;
   enrollment?: Awaited<ReturnType<typeof prisma.enrollment.create>>;
@@ -118,7 +121,7 @@ export async function enrollStudent({
       const newStatus = activeCount >= session.maxCapacity && !force ? "WAITLIST" : "ACTIVE";
       const enrollment = await tx.enrollment.update({
         where: { id: existing.id },
-        data: { status: newStatus },
+        data: { status: newStatus, registrationId: registrationId ?? null },
       });
       return { success: true, enrollment, waitlist: newStatus === "WAITLIST" };
     }
@@ -138,13 +141,13 @@ export async function enrollStudent({
     if (activeCount >= session.maxCapacity && !force) {
       // Auto-waitlist
       const enrollment = await tx.enrollment.create({
-        data: { studentId, sessionId, status: "WAITLIST" },
+        data: { studentId, sessionId, status: "WAITLIST", registrationId },
       });
       return { success: true, enrollment, waitlist: true };
     }
 
     const enrollment = await tx.enrollment.create({
-      data: { studentId, sessionId, status: "ACTIVE" },
+      data: { studentId, sessionId, status: "ACTIVE", registrationId },
     });
     return { success: true, enrollment, waitlist: false };
   });

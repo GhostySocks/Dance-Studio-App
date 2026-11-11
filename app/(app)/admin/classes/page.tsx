@@ -22,6 +22,13 @@ import { formatCurrency } from "@/lib/utils";
 import { StyledSelect } from "@/components/styled-select";
 
 import {
+  PlanPriceFields,
+  emptyPlanPrices,
+  planPricesFromCents,
+  planPricesToCents,
+  type PlanPriceDraft,
+} from "@/components/forms/plan-price-fields";
+import {
   classTemplateSchema,
   type ClassTemplateFormData,
 } from "@/lib/validations/class";
@@ -34,6 +41,8 @@ interface ClassTemplate {
   skillLevel: string | null;
   defaultDurationMins: number;
   basePriceCents: number;
+  dropInEnabled?: boolean;
+  prices?: { plan: string; priceCents: number }[];
   _count?: { sessions: number };
 }
 
@@ -96,7 +105,12 @@ export default function ClassesPage() {
     fetchClasses();
   }, [fetchClasses]);
 
+  const [planPrices, setPlanPrices] = useState<PlanPriceDraft>(emptyPlanPrices);
+  const [dropInEnabled, setDropInEnabled] = useState(true);
+
   function openAddDialog() {
+    setPlanPrices(emptyPlanPrices);
+    setDropInEnabled(true);
     setEditingClass(null);
     form.reset({
       name: "",
@@ -110,6 +124,8 @@ export default function ClassesPage() {
   }
 
   function openEditDialog(cls: ClassTemplate) {
+    setPlanPrices(planPricesFromCents(cls.prices));
+    setDropInEnabled(cls.dropInEnabled ?? true);
     setEditingClass(cls);
     form.reset({
       name: cls.name,
@@ -123,6 +139,15 @@ export default function ClassesPage() {
   }
 
   async function onSubmit(data: Record<string, unknown>) {
+    const prices = planPricesToCents(planPrices);
+    if (!prices) {
+      toast.error("Term prices must be amounts of zero or more");
+      return;
+    }
+    if (!dropInEnabled && Object.values(prices).every((p) => p === null)) {
+      toast.error("Offer at least one way to book: single classes or a term option");
+      return;
+    }
     setIsSubmitting(true);
     try {
       const url = editingClass
@@ -133,7 +158,7 @@ export default function ClassesPage() {
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, dropInEnabled, prices }),
       });
 
       if (!res.ok) {
@@ -363,7 +388,7 @@ export default function ClassesPage() {
               )}
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="basePriceCents">Price ($)</Label>
+              <Label htmlFor="basePriceCents">Price per class ($)</Label>
               <Input
                 id="basePriceCents"
                 type="number"
@@ -380,6 +405,13 @@ export default function ClassesPage() {
               )}
             </div>
           </div>
+
+          <PlanPriceFields
+            dropInEnabled={dropInEnabled}
+            onDropInChange={setDropInEnabled}
+            prices={planPrices}
+            onPricesChange={setPlanPrices}
+          />
 
           <div className="flex justify-end gap-2 pt-4 border-t">
             <Button

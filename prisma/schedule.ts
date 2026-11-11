@@ -1,36 +1,10 @@
 import type { PrismaClient } from "@prisma/client";
 
+import { tzOffsetMinutes, zonedTime } from "../lib/timezone";
+
+export { zonedTime };
+
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-
-/** Minutes that `timeZone` is ahead of UTC at the given instant (negative for the Americas). */
-export function tzOffsetMinutes(date: Date, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "numeric",
-    second: "numeric",
-  }).formatToParts(date);
-  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
-  const asUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
-  return Math.round((asUtc - date.getTime()) / 60000);
-}
-
-/** The UTC instant for a wall-clock time in `timeZone`. */
-export function zonedTime(
-  timeZone: string,
-  year: number,
-  month: number,
-  day: number,
-  hour: number,
-  minute: number
-): Date {
-  const guess = new Date(Date.UTC(year, month, day, hour, minute));
-  return new Date(guess.getTime() - tzOffsetMinutes(guess, timeZone) * 60000);
-}
 
 /** Same weekday and wall-clock time `weeks` later, even across a daylight-saving change. */
 function shiftWeeks(date: Date, weeks: number, timeZone: string): Date {

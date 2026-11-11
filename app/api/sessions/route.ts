@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { getClassSessions, createClassSession, createRecurringSessions } from "@/lib/db/classes";
 import { checkRoomConflict } from "@/lib/db/rooms";
 import { classSessionSchema } from "@/lib/validations/class";
+import { syncRegistrationsForTemplate } from "@/lib/db/registrations";
 
 export async function GET(req: NextRequest) {
   try {
@@ -70,6 +71,9 @@ export async function POST(req: NextRequest) {
         endTime,
       });
     }
+
+    // Students registered for the term get the new dates too
+    await syncRegistrationsForTemplate(data.templateId);
 
     return NextResponse.json({ data: result }, { status: 201 });
   } catch (error) {

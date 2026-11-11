@@ -12,6 +12,7 @@ import {
   getPublicStudio,
   getPublicTeachers,
 } from "@/lib/db/public";
+import { PLAN_UNITS, type BillingPlan } from "@/lib/registration-billing";
 import { formatShortDay } from "@/lib/schedule-format";
 import { formatCurrency } from "@/lib/utils";
 
@@ -21,6 +22,20 @@ export async function generateMetadata(): Promise<Metadata> {
     title: studio.name,
     description: `Dance classes for every age and level at ${studio.name}. Browse the schedule and register online.`,
   };
+}
+
+/** Per-class price when single dates can be booked, otherwise the first term option. */
+function headlinePrice(cls: {
+  basePriceCents: number;
+  dropInEnabled: boolean;
+  prices: { plan: BillingPlan; priceCents: number }[];
+}) {
+  if (cls.dropInEnabled) return { priceCents: cls.basePriceCents, unit: PLAN_UNITS.PER_CLASS };
+  for (const plan of ["MONTHLY", "SEMESTER", "WEEKLY", "ANNUAL"] as const) {
+    const price = cls.prices.find((p) => p.plan === plan);
+    if (price) return { priceCents: price.priceCents, unit: PLAN_UNITS[plan] };
+  }
+  return { priceCents: cls.basePriceCents, unit: PLAN_UNITS.PER_CLASS };
 }
 
 export default async function HomePage() {
@@ -60,7 +75,9 @@ export default async function HomePage() {
         <h2 id="classes-heading" className="text-2xl font-bold tracking-tight">
           Our classes
         </h2>
-        <p className="mt-1 text-muted-foreground">Prices are per class.</p>
+        <p className="mt-1 text-muted-foreground">
+          Book a single class, or register for a whole term.
+        </p>
 
         {classes.length === 0 ? (
           <p className="mt-8 rounded-2xl bg-white p-8 text-center text-muted-foreground shadow-sm">
@@ -100,8 +117,11 @@ export default async function HomePage() {
                           : "No dates scheduled yet"}
                       </p>
                     </div>
-                    <p className="text-lg font-bold text-foreground">
-                      {formatCurrency(cls.basePriceCents)}
+                    <p className="text-right text-lg font-bold text-foreground">
+                      {formatCurrency(headlinePrice(cls).priceCents)}
+                      <span className="block text-xs font-normal text-muted-foreground">
+                        {headlinePrice(cls).unit}
+                      </span>
                     </p>
                   </div>
                 </Link>

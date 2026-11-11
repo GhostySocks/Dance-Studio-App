@@ -116,3 +116,11 @@ export async function updateStudent(
 export async function deleteStudent(id: string) {
   return prisma.student.delete({ where: { id } });
 }
+
+/** Names for a set of student ids (used to confirm they exist). */
+export async function getStudentNames(ids: string[]) {
+  return prisma.student.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, firstName: true, lastName: true },
+  });
+}
