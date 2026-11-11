@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireAttendanceAccess } from "@/lib/attendance-access";
 import {
   getOrCreateSessionAttendance,
   markAttendance,
@@ -16,10 +15,9 @@ export async function GET(
   { params }: { params: { sessionId: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    // Admins, or the instructor who teaches this class
+    const { response } = await requireAttendanceAccess(params.sessionId);
+    if (response) return response;
 
     const records = await getOrCreateSessionAttendance(params.sessionId);
     return NextResponse.json({ data: records });
@@ -34,15 +32,9 @@ export async function PUT(
   { params }: { params: { sessionId: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Teachers and admins can mark attendance
-    if (!["SUPER_ADMIN", "ADMIN", "TEACHER"].includes(session.user.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    // Admins, or the instructor who teaches this class
+    const { response } = await requireAttendanceAccess(params.sessionId);
+    if (response) return response;
 
     const body = await req.json();
 

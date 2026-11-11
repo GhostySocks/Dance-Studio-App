@@ -310,6 +310,7 @@ if (count >= session.maxCapacity) {
 Admin can bypass with an explicit `force: true` flag.
 
 ### Attendance Locking Rules
+- An instructor can view and mark attendance only for classes they teach, from the last 14 days through the end of today in studio time (`checkAttendanceAccess` in `lib/db/attendance.ts`; every attendance route goes through `requireAttendanceAccess`). Admins can mark any class. Parents and students never can.
 - Attendance is editable by teacher until they call the submit endpoint.
 - After submission, `Attendance.lockedAt` is set.
 - Only users with role ADMIN or SUPER_ADMIN can call the unlock endpoint.

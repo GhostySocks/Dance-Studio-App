@@ -19,21 +19,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatDateTime } from "@/lib/utils";
 import { StyledSelect } from "@/components/styled-select";
 
 interface Session {
   id: string;
   startTime: string;
   endTime: string;
-  template: { name: string; danceStyle: string };
+  template: { name: string };
   room: { name: string };
-  enrollments: { id: string }[];
-}
-
-interface TeacherData {
-  id: string;
-  sessions: Session[];
+  enrolled: number;
+  /** Attendance already submitted and locked. */
+  submitted: boolean;
 }
 
 interface AttendanceRecord {
@@ -60,6 +56,17 @@ const statusConfig = {
   EXCUSED: { icon: AlertCircle, color: "text-blue-600", bg: "bg-blue-100 dark:bg-blue-950" },
 } as const;
 
+/** "Today 4:00 PM", "Yesterday 4:00 PM" or "Mon, Nov 9, 4:00 PM" in the viewer's time. */
+function sessionWhen(startTime: string) {
+  const start = new Date(startTime);
+  const time = start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const dayStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const daysAgo = Math.round((dayStart(new Date()) - dayStart(start)) / 86400000);
+  if (daysAgo === 0) return `Today ${time}`;
+  if (daysAgo === 1) return `Yesterday ${time}`;
+  return `${start.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}, ${time}`;
+}
+
 export default function TeacherAttendancePage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState("");
@@ -74,23 +81,6 @@ export default function TeacherAttendancePage() {
   const [localStatuses, setLocalStatuses] = useState<
     Record<string, "PRESENT" | "ABSENT" | "LATE" | "EXCUSED">
   >({});
-
-  useEffect(() => {
-    async function fetchSessions() {
-      try {
-        const res = await fetch("/api/teachers/me");
-        if (!res.ok) return;
-        const json = await res.json();
-        const data: TeacherData = json.data;
-        setSessions(data.sessions);
-      } catch {
-        toast.error("Failed to load sessions");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchSessions();
-  }, []);
 
   const fetchAttendance = useCallback(async (sessionId: string) => {
     setLoadingRecords(true);
@@ -114,6 +104,36 @@ export default function TeacherAttendancePage() {
       setLoadingRecords(false);
     }
   }, []);
+
+  useEffect(() => {
+    async function fetchSessions() {
+      try {
+        const res = await fetch("/api/teachers/me/attendance");
+        if (!res.ok) {
+          toast.error("Failed to load your classes");
+          return;
+        }
+        const list: Session[] = (await res.json()).data;
+        setSessions(list);
+
+        // Open the class that is on now, or the one that most recently started
+        const now = Date.now();
+        const current =
+          list.find((s) => new Date(s.startTime).getTime() <= now && now <= new Date(s.endTime).getTime()) ??
+          list.find((s) => new Date(s.startTime).getTime() <= now && !s.submitted);
+        if (current) {
+          setSelectedSessionId(current.id);
+          fetchAttendance(current.id);
+        }
+      } catch {
+        toast.error("Failed to load sessions");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchSessions();
+  }, [fetchAttendance]);
+
 
   function selectSession(sessionId: string) {
     setSelectedSessionId(sessionId);
@@ -186,6 +206,9 @@ export default function TeacherAttendancePage() {
       if (!lockRes.ok) throw new Error("Failed to submit");
 
       toast.success("Attendance submitted and locked");
+      setSessions((list) =>
+        list.map((x) => (x.id === selectedSessionId ? { ...x, submitted: true } : x))
+      );
       fetchAttendance(selectedSessionId);
     } catch {
       toast.error("Failed to submit attendance");
@@ -215,18 +238,31 @@ export default function TeacherAttendancePage() {
         description="Mark and submit attendance for your classes"
       />
 
-      <div>
-        <label className="text-sm font-medium mb-2 block">Select Class Session</label>
+      {sessions.length === 0 && (
+        <Card>
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+            You have no classes today or in the last two weeks. A class appears here on the day it
+            takes place.
+          </CardContent>
+        </Card>
+      )}
+
+      <div className={sessions.length === 0 ? "hidden" : undefined}>
+        <label className="text-sm font-medium mb-2 block">Class</label>
         <StyledSelect
           value={selectedSessionId}
           onChange={selectSession}
           options={sessions.map((s) => ({
             value: s.id,
-            label: `${s.template.name} — ${formatDateTime(s.startTime)} — ${s.room.name}`,
+            label: `${s.template.name} — ${sessionWhen(s.startTime)} — ${s.room.name}${s.submitted ? " (submitted)" : ""}`,
           }))}
-          placeholder="Choose a session..."
+          placeholder="Choose a class..."
+          maxHeight={320}
           className="w-full max-w-md"
         />
+        <p className="mt-2 text-xs text-muted-foreground">
+          Showing your classes from today and the last two weeks. For anything older, ask an admin.
+        </p>
       </div>
 
       {selectedSessionId && loadingRecords && (

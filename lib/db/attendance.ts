@@ -257,3 +257,66 @@ export async function getAttendanceReport({
     },
   };
 }
+
+// ─── Who may take attendance for which class ─────────────────────────────────
+
+/** Instructors can mark classes from the last two weeks up to the end of today. */
+export const TEACHER_ATTENDANCE_DAYS_BACK = 14;
+
+function teacherWindow(endOfToday: Date) {
+  return {
+    gte: new Date(Date.now() - TEACHER_ATTENDANCE_DAYS_BACK * 24 * 60 * 60 * 1000),
+    lte: endOfToday,
+  };
+}
+
+/**
+ * The classes an instructor can take attendance for right now: their own, from
+ * the last two weeks through the end of today (studio time), newest first.
+ */
+export async function getTeacherAttendanceSessions(userId: string, endOfToday: Date) {
+  const sessions = await prisma.classSession.findMany({
+    where: { teacher: { userId }, startTime: teacherWindow(endOfToday) },
+    select: {
+      id: true,
+      startTime: true,
+      endTime: true,
+      template: { select: { name: true } },
+      room: { select: { name: true } },
+      _count: { select: { enrollments: { where: { status: "ACTIVE" } } } },
+      attendance: { where: { lockedAt: { not: null } }, select: { id: true }, take: 1 },
+    },
+    orderBy: { startTime: "desc" },
+  });
+
+  return sessions.map(({ _count, attendance, ...session }) => ({
+    ...session,
+    enrolled: _count.enrollments,
+    submitted: attendance.length > 0,
+  }));
+}
+
+/**
+ * Whether this user may view and mark attendance for a class. Admins: any class.
+ * Instructors: only classes they teach, and only inside the attendance window
+ * (not future days, not older than two weeks). Everyone else: never.
+ */
+export async function checkAttendanceAccess(
+  user: { id: string; role: string },
+  sessionId: string,
+  endOfToday: Date
+): Promise<"ok" | "forbidden" | "not-found"> {
+  const isAdmin = user.role === "ADMIN" || user.role === "SUPER_ADMIN";
+  if (!isAdmin && user.role !== "TEACHER") return "forbidden";
+
+  const session = await prisma.classSession.findUnique({
+    where: { id: sessionId },
+    select: { startTime: true, teacher: { select: { userId: true } } },
+  });
+  if (!session) return "not-found";
+  if (isAdmin) return "ok";
+
+  if (session.teacher.userId !== user.id) return "forbidden";
+  const window = teacherWindow(endOfToday);
+  return session.startTime >= window.gte && session.startTime <= window.lte ? "ok" : "forbidden";
+}

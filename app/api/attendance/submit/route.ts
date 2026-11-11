@@ -1,21 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireAttendanceAccess } from "@/lib/attendance-access";
 import { submitAttendance } from "@/lib/db/attendance";
 import { submitAttendanceSchema } from "@/lib/validations/attendance";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (!["SUPER_ADMIN", "ADMIN", "TEACHER"].includes(session.user.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    const body = await req.json();
+    const body = await req.json().catch(() => null);
     const parsed = submitAttendanceSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
@@ -23,6 +13,10 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Admins, or the instructor who teaches this class
+    const { session, response } = await requireAttendanceAccess(parsed.data.sessionId);
+    if (response) return response;
 
     const result = await submitAttendance(parsed.data.sessionId, session.user.id);
     return NextResponse.json({ data: result });
