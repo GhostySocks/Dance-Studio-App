@@ -242,6 +242,38 @@ export async function generateAllInvoices({
   return result;
 }
 
+/**
+ * Marks draft invoices as sent: the ones named in `ids`, or every draft when
+ * `ids` is left out. Invoices that are not drafts are left alone and counted as
+ * skipped, so a paid or void invoice can never be "sent" again from a stale list.
+ */
+export async function markDraftInvoicesSent({ ids, actorId }: { ids?: string[]; actorId: string }) {
+  const drafts = await prisma.invoice.findMany({
+    where: { status: "DRAFT", ...(ids ? { id: { in: ids } } : {}) },
+    select: { id: true },
+  });
+  const sentIds = drafts.map((d) => d.id);
+  const skipped = ids ? new Set(ids).size - sentIds.length : 0;
+  if (sentIds.length === 0) return { sentIds, skipped };
+
+  await prisma.$transaction([
+    prisma.invoice.updateMany({
+      where: { id: { in: sentIds }, status: "DRAFT" },
+      data: { status: "SENT" },
+    }),
+    prisma.auditLog.create({
+      data: {
+        actorId,
+        action: "INVOICES_SENT",
+        entityType: "Invoice",
+        entityId: "bulk",
+        meta: { count: sentIds.length, skipped, all: !ids },
+      },
+    }),
+  ]);
+  return { sentIds, skipped };
+}
+
 export async function updateInvoiceStatus(
   id: string,
   status: "DRAFT" | "SENT" | "PAID" | "OVERDUE" | "VOID"

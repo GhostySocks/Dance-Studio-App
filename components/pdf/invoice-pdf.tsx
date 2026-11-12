@@ -8,6 +8,8 @@ import {
   StyleSheet,
 } from "@react-pdf/renderer";
 
+import { formatDate } from "@/lib/utils";
+
 const styles = StyleSheet.create({
   page: { padding: 40, fontFamily: "Helvetica", fontSize: 10 },
   header: { marginBottom: 30 },
@@ -61,8 +63,7 @@ interface InvoiceLineItem {
   type: string;
 }
 
-interface InvoicePDFProps {
-  invoice: {
+export interface PdfInvoice {
     id: string;
     status: string;
     totalCents: number;
@@ -72,11 +73,19 @@ interface InvoicePDFProps {
     lineItems: InvoiceLineItem[];
     student?: { firstName: string; lastName: string } | null;
     familyGroup?: { name: string } | null;
-  };
-  studioName?: string;
 }
 
-export function InvoicePDF({ invoice, studioName = "Rhythm & Grace Dance Academy" }: InvoicePDFProps) {
+interface InvoicePDFProps {
+  invoice: PdfInvoice;
+  studioName?: string;
+  /** Studio timezone, so the dates match the rest of the app. */
+  timeZone?: string;
+}
+
+const DEFAULT_STUDIO = "Dance Studio";
+
+/** One invoice on its own page. */
+function InvoicePage({ invoice, studioName = DEFAULT_STUDIO, timeZone }: InvoicePDFProps) {
   const billTo = invoice.familyGroup
     ? invoice.familyGroup.name
     : invoice.student
@@ -84,7 +93,6 @@ export function InvoicePDF({ invoice, studioName = "Rhythm & Grace Dance Academy
       : "Unknown";
 
   return (
-    <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
           <Text style={styles.studioName}>{studioName}</Text>
@@ -106,15 +114,14 @@ export function InvoicePDF({ invoice, studioName = "Rhythm & Grace Dance Academy
         <View style={styles.row}>
           <Text style={styles.label}>Period:</Text>
           <Text style={styles.value}>
-            {new Date(invoice.periodStart).toLocaleDateString()} –{" "}
-            {new Date(invoice.periodEnd).toLocaleDateString()}
+            {formatDate(invoice.periodStart, timeZone)} – {formatDate(invoice.periodEnd, timeZone)}
           </Text>
         </View>
         {invoice.dueDate && (
           <View style={styles.row}>
             <Text style={styles.label}>Due Date:</Text>
             <Text style={styles.value}>
-              {new Date(invoice.dueDate).toLocaleDateString()}
+              {formatDate(invoice.dueDate, timeZone)}
             </Text>
           </View>
         )}
@@ -144,6 +151,32 @@ export function InvoicePDF({ invoice, studioName = "Rhythm & Grace Dance Academy
           Thank you for your business! — {studioName}
         </Text>
       </Page>
+  );
+}
+
+export function InvoicePDF(props: InvoicePDFProps) {
+  return (
+    <Document>
+      <InvoicePage {...props} />
+    </Document>
+  );
+}
+
+/** Several invoices in one document, a page each, for printing a batch. */
+export function InvoicesPDF({
+  invoices,
+  studioName,
+  timeZone,
+}: {
+  invoices: PdfInvoice[];
+  studioName?: string;
+  timeZone?: string;
+}) {
+  return (
+    <Document>
+      {invoices.map((invoice) => (
+        <InvoicePage key={invoice.id} invoice={invoice} studioName={studioName} timeZone={timeZone} />
+      ))}
     </Document>
   );
 }

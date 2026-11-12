@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { toast } from "sonner";
-import { Plus, Send, CheckCircle, Ban, FileDown, Files, Loader2 } from "lucide-react";
+import { Plus, Send, CheckCircle, Ban, FileDown, Files, Loader2, Printer } from "lucide-react";
 
 import { GenerateAllInvoices } from "@/components/forms/generate-all-invoices";
+import { printInvoices } from "@/components/pdf/print-invoices";
 import dynamic from "next/dynamic";
 
 import { Modal } from "@/components/modal";
@@ -67,6 +68,30 @@ interface Student {
   lastName: string;
 }
 
+function billToName(invoice: InvoiceRow) {
+  if (invoice.familyGroup) return invoice.familyGroup.name;
+  if (invoice.student) return `${invoice.student.firstName} ${invoice.student.lastName}`;
+  return "-";
+}
+
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+
+const CHECKBOX = "h-4 w-4 cursor-pointer rounded border-input accent-primary";
+
+/** Every invoice matching the filter, across all pages (for Print all). */
+async function fetchAllInvoices(status: string): Promise<InvoiceRow[]> {
+  const all: InvoiceRow[] = [];
+  for (let page = 1; ; page++) {
+    const params = new URLSearchParams({ page: String(page), perPage: "200" });
+    if (status) params.set("status", status);
+    const res = await fetch(`/api/invoices?${params}`);
+    if (!res.ok) throw new Error("Failed to load invoices");
+    const json = await res.json();
+    all.push(...json.data.invoices);
+    if (page >= json.data.totalPages) return all;
+  }
+}
+
 function invoiceStatusVariant(
   status: string
 ): "default" | "secondary" | "destructive" | "outline" {
@@ -103,6 +128,14 @@ export default function BillingPage() {
 
   const [detailInvoice, setDetailInvoice] = useState<InvoiceRow | null>(null);
 
+  // Ticked invoices, kept by id so the selection survives changing page
+  const [selected, setSelected] = useState<Map<string, InvoiceRow>>(new Map());
+  const [studio, setStudio] = useState<{ name?: string; timezone?: string }>({});
+  /** What the send confirmation is about to send; null when it is closed. */
+  const [sendPlan, setSendPlan] = useState<{ ids?: string[]; count: number } | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
+
   const fetchInvoices = useCallback(async () => {
     try {
       const params = new URLSearchParams({ page: String(page), perPage: "20" });
@@ -110,8 +143,16 @@ export default function BillingPage() {
       const res = await fetch(`/api/invoices?${params}`);
       if (!res.ok) throw new Error("Failed");
       const json = await res.json();
-      setInvoices(json.data.invoices);
+      const rows: InvoiceRow[] = json.data.invoices;
+      setInvoices(rows);
       setTotalPages(json.data.totalPages);
+      // Keep ticked rows up to date (their status may just have changed)
+      setSelected((prev) => {
+        if (prev.size === 0) return prev;
+        const next = new Map(prev);
+        for (const row of rows) if (next.has(row.id)) next.set(row.id, row);
+        return next;
+      });
     } catch {
       toast.error("Failed to load invoices");
     }
@@ -124,10 +165,15 @@ export default function BillingPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [famRes, stuRes] = await Promise.all([
+        const [famRes, stuRes, studioRes] = await Promise.all([
           fetch("/api/families?perPage=100"),
           fetch("/api/students?perPage=200"),
+          fetch("/api/studio"),
         ]);
+        if (studioRes.ok) {
+          const json = await studioRes.json();
+          setStudio({ name: json.data?.name, timezone: json.data?.timezone });
+        }
         if (famRes.ok) {
           const json = await famRes.json();
           setFamilies(json.data.families);
@@ -207,8 +253,133 @@ export default function BillingPage() {
     }
   }
 
+  function toggle(invoice: InvoiceRow, on: boolean) {
+    setSelected((prev) => {
+      const next = new Map(prev);
+      if (on) next.set(invoice.id, invoice);
+      else next.delete(invoice.id);
+      return next;
+    });
+  }
+
+  function togglePage(on: boolean) {
+    setSelected((prev) => {
+      const next = new Map(prev);
+      for (const invoice of invoices) {
+        if (on) next.set(invoice.id, invoice);
+        else next.delete(invoice.id);
+      }
+      return next;
+    });
+  }
+
+  const selectedRows = useMemo(() => Array.from(selected.values()), [selected]);
+  const selectedDrafts = selectedRows.filter((invoice) => invoice.status === "DRAFT");
+  const pageTicked = invoices.filter((invoice) => selected.has(invoice.id)).length;
+
+  async function askSendAll() {
+    try {
+      const res = await fetch("/api/invoices?status=DRAFT&perPage=1");
+      if (!res.ok) throw new Error("Failed");
+      const count: number = (await res.json()).data.total;
+      if (count === 0) {
+        toast.info("There are no draft invoices to send");
+        return;
+      }
+      setSendPlan({ count });
+    } catch {
+      toast.error("Could not check for draft invoices");
+    }
+  }
+
+  function askSendSelected() {
+    if (selectedDrafts.length === 0) {
+      toast.info("None of the selected invoices are drafts, so there is nothing to send");
+      return;
+    }
+    setSendPlan({ ids: selectedDrafts.map((invoice) => invoice.id), count: selectedDrafts.length });
+  }
+
+  async function onSend() {
+    if (!sendPlan) return;
+    setIsSending(true);
+    try {
+      const res = await fetch("/api/invoices/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(sendPlan.ids ? { ids: sendPlan.ids } : {}),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Sending failed");
+      const { sent, emailed } = json.data as { sent: number; emailed: number; skipped: number };
+      if (sent === 0) {
+        toast.info("No draft invoices were left to send");
+      } else {
+        toast.success(`${plural(sent, "invoice", "invoices")} marked as sent`, {
+          description:
+            emailed < sent
+              ? `${plural(sent - emailed, "was", "were")} not emailed: no email address on file, or email is not set up yet.`
+              : undefined,
+        });
+      }
+      setSendPlan(null);
+      setSelected(new Map());
+      fetchInvoices();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Sending failed");
+    } finally {
+      setIsSending(false);
+    }
+  }
+
+  async function onPrint(which: "all" | "selected") {
+    setIsPrinting(true);
+    try {
+      let rows = selectedRows;
+      if (which === "all") {
+        // Void invoices are left out unless they are what is being looked at
+        rows = (await fetchAllInvoices(statusFilter)).filter(
+          (invoice) => statusFilter === "VOID" || invoice.status !== "VOID"
+        );
+      }
+      if (rows.length === 0) {
+        toast.info("There are no invoices to print");
+        return;
+      }
+      await printInvoices(rows, studio);
+    } catch {
+      toast.error("Could not prepare the invoices for printing");
+    } finally {
+      setIsPrinting(false);
+    }
+  }
+
   const columns: ColumnDef<InvoiceRow>[] = useMemo(
     () => [
+      {
+        id: "select",
+        header: () => (
+          <input
+            type="checkbox"
+            className={CHECKBOX}
+            aria-label="Select all invoices on this page"
+            checked={invoices.length > 0 && pageTicked === invoices.length}
+            ref={(el) => {
+              if (el) el.indeterminate = pageTicked > 0 && pageTicked < invoices.length;
+            }}
+            onChange={(e) => togglePage(e.target.checked)}
+          />
+        ),
+        cell: ({ row }) => (
+          <input
+            type="checkbox"
+            className={CHECKBOX}
+            aria-label={`Select the invoice for ${billToName(row.original)}`}
+            checked={selected.has(row.original.id)}
+            onChange={(e) => toggle(row.original, e.target.checked)}
+          />
+        ),
+      },
       {
         accessorKey: "billTo",
         header: "Bill To",
@@ -219,11 +390,7 @@ export default function BillingPage() {
               className="font-medium text-left hover:underline"
               onClick={() => setDetailInvoice(inv)}
             >
-              {inv.familyGroup
-                ? inv.familyGroup.name
-                : inv.student
-                  ? `${inv.student.firstName} ${inv.student.lastName}`
-                  : "-"}
+              {billToName(inv)}
             </button>
           );
         },
@@ -304,7 +471,7 @@ export default function BillingPage() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [invoices, selected, pageTicked]
   );
 
   return (
@@ -331,7 +498,7 @@ export default function BillingPage() {
         }}
       />
 
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-4">
         <StyledSelect
           value={statusFilter}
           onChange={(val) => {
@@ -348,7 +515,65 @@ export default function BillingPage() {
           ]}
           placeholder="All Statuses"
         />
+
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {selected.size > 0 && (
+            <span className="text-sm text-muted-foreground" aria-live="polite">
+              {selected.size} selected{" "}
+              <button
+                type="button"
+                className="font-medium text-primary underline-offset-4 hover:underline"
+                onClick={() => setSelected(new Map())}
+              >
+                Clear
+              </button>
+            </span>
+          )}
+          <Button variant="outline" size="sm" onClick={askSendSelected} disabled={selected.size === 0}>
+            <Send className="mr-2 h-4 w-4" aria-hidden />
+            Send Selected
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPrint("selected")}
+            disabled={selected.size === 0 || isPrinting}
+          >
+            <Printer className="mr-2 h-4 w-4" aria-hidden />
+            Print Selected
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => onPrint("all")} disabled={isPrinting}>
+            {isPrinting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <Printer className="mr-2 h-4 w-4" aria-hidden />
+            )}
+            Print All
+          </Button>
+          <Button size="sm" onClick={askSendAll}>
+            <Send className="mr-2 h-4 w-4" aria-hidden />
+            Send All Drafts
+          </Button>
+        </div>
       </div>
+
+      <Modal
+        open={!!sendPlan}
+        onClose={() => setSendPlan(null)}
+        title={sendPlan ? `Send ${plural(sendPlan.count, "draft invoice", "draft invoices")}?` : "Send invoices?"}
+        description="Each one is emailed to the family or student and appears in their portal to pay. A sent invoice cannot go back to draft, though it can still be voided."
+        className="max-w-md"
+      >
+        <div className="flex justify-end gap-2 border-t pt-4">
+          <Button variant="outline" onClick={() => setSendPlan(null)} disabled={isSending}>
+            Cancel
+          </Button>
+          <Button onClick={onSend} disabled={isSending}>
+            {isSending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
+            Send
+          </Button>
+        </div>
+      </Modal>
 
       <Card className="rounded-2xl border-0 shadow-md">
         <CardContent className="pt-6">
@@ -507,7 +732,13 @@ export default function BillingPage() {
               <div>
                 {typeof window !== "undefined" && PDFDownloadLink && InvoicePDFComponent && (
                   <PDFDownloadLink
-                    document={<InvoicePDFComponent invoice={detailInvoice} />}
+                    document={
+                      <InvoicePDFComponent
+                        invoice={detailInvoice}
+                        studioName={studio.name}
+                        timeZone={studio.timezone}
+                      />
+                    }
                     fileName={`invoice-${detailInvoice.id.slice(-8)}.pdf`}
                   >
                     {({ loading: pdfLoading }) => (

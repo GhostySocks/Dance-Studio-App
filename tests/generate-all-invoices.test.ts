@@ -14,7 +14,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: db }));
 vi.mock("@/lib/billing", () => billing);
 
 import { billingPeriod, mapWithLimit } from "@/lib/billing-period";
-import { generateAllInvoices } from "@/lib/db/invoices";
+import { generateAllInvoices, markDraftInvoicesSent } from "@/lib/db/invoices";
 
 const period = billingPeriod("America/New_York", "2026-11-01", "2026-11-30");
 
@@ -148,5 +148,52 @@ describe("generateAllInvoices", () => {
     expect(data.actorId).toBe("admin-1");
     expect(data.action).toBe("INVOICES_GENERATED");
     expect(data.meta).toMatchObject({ created: 3, totalCents: 21000, failed: 0 });
+  });
+});
+
+describe("markDraftInvoicesSent", () => {
+  const sendDb = db as typeof db & {
+    invoice: { updateMany: ReturnType<typeof vi.fn> };
+    $transaction: ReturnType<typeof vi.fn>;
+  };
+
+  beforeEach(() => {
+    sendDb.invoice.updateMany = vi.fn().mockReturnValue("update");
+    sendDb.$transaction = vi.fn().mockResolvedValue([]);
+    db.auditLog.create.mockReturnValue("audit");
+  });
+
+  it("sends only the chosen invoices that are still drafts", async () => {
+    db.invoice.findMany.mockResolvedValue([{ id: "inv-1" }, { id: "inv-3" }]);
+    const result = await markDraftInvoicesSent({ ids: ["inv-1", "inv-2", "inv-3"], actorId: "admin-1" });
+
+    expect(db.invoice.findMany.mock.calls[0][0].where).toEqual({
+      status: "DRAFT",
+      id: { in: ["inv-1", "inv-2", "inv-3"] },
+    });
+    expect(result).toEqual({ sentIds: ["inv-1", "inv-3"], skipped: 1 });
+
+    const update = sendDb.invoice.updateMany.mock.calls[0][0];
+    // Still guarded by status, so a paid or void invoice can never be flipped to sent
+    expect(update.where).toEqual({ id: { in: ["inv-1", "inv-3"] }, status: "DRAFT" });
+    expect(update.data).toEqual({ status: "SENT" });
+  });
+
+  it("sends every draft when no invoices are named", async () => {
+    db.invoice.findMany.mockResolvedValue([{ id: "inv-1" }, { id: "inv-2" }]);
+    const result = await markDraftInvoicesSent({ actorId: "admin-1" });
+    expect(db.invoice.findMany.mock.calls[0][0].where).toEqual({ status: "DRAFT" });
+    expect(result).toEqual({ sentIds: ["inv-1", "inv-2"], skipped: 0 });
+    expect(db.auditLog.create.mock.calls[0][0].data).toMatchObject({
+      action: "INVOICES_SENT",
+      meta: { count: 2, all: true },
+    });
+  });
+
+  it("changes nothing when there are no drafts", async () => {
+    db.invoice.findMany.mockResolvedValue([]);
+    const result = await markDraftInvoicesSent({ ids: ["inv-9"], actorId: "admin-1" });
+    expect(result).toEqual({ sentIds: [], skipped: 1 });
+    expect(sendDb.$transaction).not.toHaveBeenCalled();
   });
 });

@@ -19,6 +19,11 @@ export const generateAllInvoicesSchema = z
     path: ["periodEnd"],
   });
 
+/** Send chosen draft invoices, or every draft when no ids are given. */
+export const sendInvoicesSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(500).optional(),
+});
+
 export const invoiceStatusSchema = z.object({
   status: z.enum(["DRAFT", "SENT", "PAID", "OVERDUE", "VOID"]),
 });
