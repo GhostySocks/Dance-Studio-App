@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { requireAdmin } from "@/lib/api-auth";
 import { getRooms, createRoom } from "@/lib/db/rooms";
 import { roomSchema } from "@/lib/validations/room";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { response } = await requireAdmin();
+    if (response) return response;
 
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search") ?? undefined;

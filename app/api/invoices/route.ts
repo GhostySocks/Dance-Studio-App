@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { requireAdmin } from "@/lib/api-auth";
 import { getInvoices, createInvoiceFromBilling } from "@/lib/db/invoices";
 import { generateInvoiceSchema } from "@/lib/validations/invoice";
 import { billingPeriod } from "@/lib/billing-period";
@@ -8,10 +9,8 @@ import { getStudioInfo } from "@/lib/db/recipients";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { response } = await requireAdmin();
+    if (response) return response;
 
     const { searchParams } = new URL(req.url);
     const result = await getInvoices({

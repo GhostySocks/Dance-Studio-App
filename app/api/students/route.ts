@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { requireAdmin } from "@/lib/api-auth";
 import { getStudents } from "@/lib/db/students";
 import { saveStudent } from "@/lib/student-api";
 import { studentSchema } from "@/lib/validations/student";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { response } = await requireAdmin();
+    if (response) return response;
 
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search") ?? undefined;

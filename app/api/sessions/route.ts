@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { requireAdmin } from "@/lib/api-auth";
 import { getClassSessions, createClassSession, createRecurringSessions } from "@/lib/db/classes";
 import { checkRoomConflict } from "@/lib/db/rooms";
 import { classSessionSchema } from "@/lib/validations/class";
@@ -8,10 +9,8 @@ import { syncRegistrationsForTemplate } from "@/lib/db/registrations";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { response } = await requireAdmin();
+    if (response) return response;
 
     const { searchParams } = new URL(req.url);
     const startDate = searchParams.get("startDate") ?? undefined;

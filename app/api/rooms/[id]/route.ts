@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { requireAdmin } from "@/lib/api-auth";
 import { getRoomById, updateRoom, deleteRoom } from "@/lib/db/rooms";
 import { roomSchema } from "@/lib/validations/room";
 
@@ -9,10 +10,8 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { response } = await requireAdmin();
+    if (response) return response;
 
     const room = await getRoomById(params.id);
     if (!room) {
