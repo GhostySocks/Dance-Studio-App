@@ -56,7 +56,7 @@ export default async function PublicLayout({ children }: { children: React.React
                 >
                   Sign in
                 </Link>
-                <LinkButton href="/register" className="h-9 px-4">
+                <LinkButton href="/register" variant="cta" className="h-9 px-4">
                   Register
                 </LinkButton>
               </>

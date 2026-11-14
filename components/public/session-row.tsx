@@ -74,13 +74,13 @@ export function SessionRow({
         {session.template.dropInEnabled ? (
           <LinkButton
             href={`/register?session=${session.id}`}
-            variant={full ? "outline" : "default"}
+            variant={full ? "outline" : "cta"}
             className="h-9 px-4"
           >
             {full ? "Join waitlist" : "Register"}
           </LinkButton>
         ) : (
-          <LinkButton href={`/classes/${session.template.id}#register`} className="h-9 px-4">
+          <LinkButton href={`/classes/${session.template.id}#register`} variant="cta" className="h-9 px-4">
             Register for term
           </LinkButton>
         )}

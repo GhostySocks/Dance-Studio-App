@@ -18,7 +18,7 @@ export const styles = {
   value: { fontSize: "14px", color: "#111827", padding: "6px 0", textAlign: "right" },
   total: { fontSize: "16px", fontWeight: 700, color: "#111827", padding: "10px 0" },
   button: {
-    backgroundColor: "#1c8247",
+    backgroundColor: "#05668D",
     color: "#ffffff",
     borderRadius: "8px",
     padding: "12px 20px",

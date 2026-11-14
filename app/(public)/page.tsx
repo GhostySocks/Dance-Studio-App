@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, CalendarDays, Clock } from "lucide-react";
 
+import { ParallaxPhoto } from "@/components/public/parallax-photo";
 import { Reveal, StaggerGroup, StaggerItem } from "@/components/public/reveal";
 import { SessionRow } from "@/components/public/session-row";
 import { Badge } from "@/components/ui/badge";
@@ -60,7 +61,7 @@ export default async function HomePage() {
             Browse the schedule, pick a class and register online in a couple of minutes.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <LinkButton href="/schedule" className="h-11 px-6 text-base">
+            <LinkButton href="/schedule" variant="cta" className="h-11 px-6 text-base">
               <CalendarDays className="mr-1 h-4 w-4" aria-hidden />
               View schedule
             </LinkButton>
@@ -71,11 +72,17 @@ export default async function HomePage() {
         </Reveal>
       </section>
 
-      <section aria-labelledby="classes-heading" className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
-        <h2 id="classes-heading" className="text-2xl font-bold tracking-tight">
+      <section aria-labelledby="classes-heading" className="relative isolate overflow-hidden">
+        {/* The studio photo at full brightness, drifting slowly behind frosted class cards */}
+        <ParallaxPhoto src="/images/classes-studio.webp" />
+        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
+        <h2
+          id="classes-heading"
+          className="text-2xl font-bold tracking-tight text-white [text-shadow:0_0_28px_rgb(0_0_0/0.4),0_0_10px_rgb(0_0_0/0.18)]"
+        >
           Our classes
         </h2>
-        <p className="mt-1 text-muted-foreground">
+        <p className="mt-1 text-white [text-shadow:0_0_22px_rgb(0_0_0/0.45),0_0_8px_rgb(0_0_0/0.2)]">
           Book a single class, or register for a whole term.
         </p>
 
@@ -89,7 +96,7 @@ export default async function HomePage() {
               <StaggerItem key={cls.id}>
                 <Link
                   href={`/classes/${cls.id}`}
-                  className="group flex h-full flex-col rounded-2xl border border-border/50 bg-white p-6 shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="beam-border group flex h-full flex-col rounded-2xl border border-white/60 bg-white/80 p-6 shadow-lg backdrop-blur-md transition duration-300 ease-out hover:-translate-y-1.5 hover:bg-white/90 hover:shadow-2xl focus-visible:-translate-y-1.5 focus-visible:outline-none motion-reduce:transition-none motion-reduce:hover:translate-y-0"
                 >
                   <div className="flex flex-wrap gap-2">
                     {cls.danceStyle && (
@@ -129,6 +136,7 @@ export default async function HomePage() {
             ))}
           </StaggerGroup>
         )}
+        </div>
       </section>
 
       {schedule.length > 0 && (

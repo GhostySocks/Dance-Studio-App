@@ -247,6 +247,7 @@ export function BillingView() {
                           <FileDown className="h-4 w-4" />
                         </Button>
                         <Button
+                          variant="cta"
                           size="sm"
                           onClick={() => handlePay(invoice.id)}
                           disabled={paying === invoice.id}

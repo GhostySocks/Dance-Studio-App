@@ -108,6 +108,7 @@ export default async function ClassDetailPage({ params }: { params: { id: string
                       </p>
                       <LinkButton
                         href={`/register?class=${cls.id}&term=${term.termId}&plan=${plan.plan}`}
+                        variant="cta"
                         className="mt-4 h-9 px-4"
                       >
                         Register

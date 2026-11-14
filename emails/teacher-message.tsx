@@ -30,7 +30,7 @@ export default function TeacherMessageEmail({
       </Text>
       <Section
         style={{
-          borderLeft: "3px solid #1c8247",
+          borderLeft: "3px solid #05668D",
           padding: "4px 0 4px 16px",
           margin: "16px 0",
         }}

@@ -404,7 +404,7 @@ export default function ReportsPage() {
                         </div>
                         <div className="h-6 w-full rounded bg-muted overflow-hidden">
                           <div
-                            className="h-full rounded bg-violet-500 transition-all"
+                            className="h-full rounded bg-domain-classes-icon transition-all"
                             style={{ width: `${(r.totalSessions / max) * 100}%` }}
                           />
                         </div>

@@ -342,7 +342,7 @@ export function RegisterForm({
       )}
 
       <div className="flex flex-wrap items-center gap-4">
-        <Button type="submit" disabled={isSubmitting} className="h-11 px-6 text-base">
+        <Button type="submit" variant="cta" disabled={isSubmitting} className="h-11 px-6 text-base">
           {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
           {isSubmitting ? "Creating account…" : hasSelection ? "Create account and register" : "Create account"}
         </Button>

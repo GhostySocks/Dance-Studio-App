@@ -24,3 +24,9 @@ export const slideInRight: Variants = {
   hidden: { opacity: 0, x: 24 },
   visible: { opacity: 1, x: 0, transition: { duration: 0.25, ease: "easeOut" } },
 };
+
+/**
+ * How far a parallax background drifts (as a share of its own height) while its
+ * section crosses the window. Small on purpose: it should be felt, not noticed.
+ */
+export const parallaxShift = ["-9%", "9%"];

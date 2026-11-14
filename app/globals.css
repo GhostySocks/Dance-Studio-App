@@ -3,57 +3,70 @@
 @tailwind utilities;
 
 @layer base {
+  /*
+   * Brand palette
+   *   Baltic Blue  #05668D  197 93% 29%   main colour (buttons, links, active menu)
+   *   Mint Leaf    #02C39A  167 98% 39%   call-to-action buttons (white text)
+   *   Teal         #028090  187 97% 29%   schedule / time
+   *   Verdigris    #00A896  174 100% 33%  people
+   *   Cream        #F0F3BD   63 69% 85%   money
+   *   Violet (kept from the earlier theme) classes
+   */
   :root {
-    --background: 220 20% 97%;
-    --foreground: 220 20% 10%;
+    --background: 190 25% 97%;
+    --foreground: 197 45% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 220 20% 10%;
+    --card-foreground: 197 45% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 20% 10%;
-    --primary: 145 65% 31%;
+    --popover-foreground: 197 45% 11%;
+    /* Baltic Blue: 6.4:1 with white text (WCAG AA) */
+    --primary: 197 93% 29%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 14% 94%;
-    --secondary-foreground: 220 20% 13%;
-    --muted: 220 14% 94%;
-    --muted-foreground: 220 10% 45%;
-    --accent: 145 50% 95%;
-    --accent-foreground: 145 60% 30%;
+    /* Mint Leaf with white text, at the owner's request. Contrast is 2.3:1, below WCAG AA (4.5:1) */
+    --cta: 167 98% 39%;
+    --cta-foreground: 0 0% 100%;
+    --secondary: 190 18% 94%;
+    --secondary-foreground: 197 45% 13%;
+    --muted: 190 18% 94%;
+    --muted-foreground: 195 12% 40%;
+    --accent: 197 55% 94%;
+    --accent-foreground: 197 93% 23%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
-    --border: 220 14% 90%;
-    --input: 220 14% 90%;
-    --ring: 145 65% 31%;
+    --border: 190 16% 89%;
+    --input: 190 16% 89%;
+    --ring: 197 93% 29%;
     --radius: 1rem;
 
-    /* Domain colors — Students/People */
-    --domain-people: 135 60% 88%;
-    --domain-people-foreground: 135 40% 25%;
-    --domain-people-icon: 135 50% 45%;
-    /* Domain colors — Classes/Dance */
+    /* Domain colors — Students/People (Verdigris) */
+    --domain-people: 174 55% 88%;
+    --domain-people-foreground: 174 80% 17%;
+    --domain-people-icon: 174 100% 33%;
+    /* Domain colors — Classes/Dance (violet) */
     --domain-classes: 270 55% 90%;
     --domain-classes-foreground: 270 40% 25%;
     --domain-classes-icon: 270 50% 55%;
-    /* Domain colors — Money/Billing */
-    --domain-money: 52 80% 85%;
-    --domain-money-foreground: 45 50% 25%;
-    --domain-money-icon: 45 60% 45%;
-    /* Domain colors — Schedule/Time */
-    --domain-schedule: 210 60% 90%;
-    --domain-schedule-foreground: 210 40% 25%;
-    --domain-schedule-icon: 210 50% 50%;
-    /* Domain colors — Alerts/Waitlist */
+    /* Domain colors — Money/Billing (Cream) */
+    --domain-money: 63 69% 85%;
+    --domain-money-foreground: 60 45% 20%;
+    --domain-money-icon: 58 60% 36%;
+    /* Domain colors — Schedule/Time (Teal) */
+    --domain-schedule: 187 55% 89%;
+    --domain-schedule-foreground: 187 90% 18%;
+    --domain-schedule-icon: 187 97% 29%;
+    /* Domain colors — Alerts/Waitlist (rose: the palette has no warning colour) */
     --domain-alert: 340 60% 90%;
     --domain-alert-foreground: 340 40% 25%;
     --domain-alert-icon: 340 50% 50%;
 
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 220 20% 10%;
-    --sidebar-primary: 145 65% 31%;
+    --sidebar-foreground: 197 45% 11%;
+    --sidebar-primary: 197 93% 29%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 145 50% 95%;
-    --sidebar-accent-foreground: 145 60% 30%;
-    --sidebar-border: 220 14% 92%;
-    --sidebar-ring: 145 65% 31%;
+    --sidebar-accent: 197 55% 94%;
+    --sidebar-accent-foreground: 197 93% 23%;
+    --sidebar-border: 190 16% 91%;
+    --sidebar-ring: 197 93% 29%;
   }
 }
 
@@ -63,5 +76,67 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+  }
+}
+
+/*
+ * A light that travels around the edge of an element while it is hovered or
+ * focused (the class tiles and hero buttons on the public home page). Put
+ * .beam-border on a rounded, bordered element. Plain CSS: a rotating
+ * conic-gradient, masked so that only a 2px ring of it shows.
+ */
+@property --beam-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@layer components {
+  .beam-border {
+    position: relative;
+  }
+  .beam-border::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    padding: 2px;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease-out;
+    background: conic-gradient(
+      from var(--beam-angle),
+      transparent 0%,
+      transparent 62%,
+      hsl(var(--primary)) 76%,
+      hsl(var(--cta)) 90%,
+      #fff 97%,
+      transparent 100%
+    );
+    /* Show the gradient only in the 2px ring, not across the card */
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+    filter: drop-shadow(0 0 6px hsl(var(--cta) / 0.7));
+  }
+  .beam-border:hover::before,
+  .beam-border:focus-visible::before {
+    opacity: 1;
+    animation: beam-travel 2.4s linear infinite;
+  }
+}
+
+@keyframes beam-travel {
+  to {
+    --beam-angle: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* No travelling light: a steady ring in the brand colours instead */
+  .beam-border:hover::before,
+  .beam-border:focus-visible::before {
+    animation: none;
+    background: hsl(var(--cta));
   }
 }
