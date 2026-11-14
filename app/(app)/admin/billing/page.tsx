@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { toast } from "sonner";
-import { Plus, Send, CheckCircle, Ban, FileDown, Files, Loader2, Printer } from "lucide-react";
+import { Plus, Send, CheckCircle, Ban, FileDown, Files, Loader2, Printer, Trash2 } from "lucide-react";
 
 import { GenerateAllInvoices } from "@/components/forms/generate-all-invoices";
-import { printInvoices } from "@/components/pdf/print-invoices";
-import dynamic from "next/dynamic";
+import { InvoiceLineItemForm } from "@/components/forms/invoice-line-item-form";
+import { downloadInvoice, printInvoices } from "@/components/pdf/print-invoices";
 
 import { Modal } from "@/components/modal";
 import { PageHeader } from "@/components/page-header";
@@ -19,24 +19,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { StyledSelect } from "@/components/styled-select";
 import { RequiredMark, RequiredNote } from "@/components/required-mark";
-
-// Dynamically import PDF components (client-only)
-const PDFDownloadLink = dynamic(
-  () => import("@react-pdf/renderer").then((mod) => mod.PDFDownloadLink),
-  { ssr: false }
-);
-
-const InvoicePDFComponent = dynamic(
-  () => import("@/components/pdf/invoice-pdf").then((mod) => {
-    // Return a wrapper that renders the PDF
-    const Wrapper = (props: Parameters<typeof mod.InvoicePDF>[0]) => {
-      return <mod.InvoicePDF {...props} />;
-    };
-    Wrapper.displayName = "InvoicePDFWrapper";
-    return Wrapper;
-  }),
-  { ssr: false }
-);
 
 interface InvoiceRow {
   id: string;
@@ -53,6 +35,8 @@ interface InvoiceRow {
     description: string;
     amountCents: number;
     type: string;
+    /** Added by hand by an admin, so it can be removed while the invoice is a draft */
+    custom?: boolean;
   }[];
   payments: { id: string; amountCents: number; status: string }[];
 }
@@ -135,6 +119,8 @@ export default function BillingPage() {
   const [sendPlan, setSendPlan] = useState<{ ids?: string[]; count: number } | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [removingLineId, setRemovingLineId] = useState<string | null>(null);
 
   const fetchInvoices = useCallback(async () => {
     try {
@@ -253,6 +239,28 @@ export default function BillingPage() {
     }
   }
 
+  /** An invoice whose lines were just changed: refresh it everywhere it is shown. */
+  function onInvoiceChanged(updated: InvoiceRow) {
+    setDetailInvoice(updated);
+    setInvoices((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
+    setSelected((prev) => (prev.has(updated.id) ? new Map(prev).set(updated.id, updated) : prev));
+  }
+
+  async function removeLine(invoiceId: string, lineItemId: string) {
+    setRemovingLineId(lineItemId);
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}/line-items/${lineItemId}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Could not remove the line");
+      toast.success("Line removed");
+      onInvoiceChanged(json.data);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Could not remove the line");
+    } finally {
+      setRemovingLineId(null);
+    }
+  }
+
   function toggle(invoice: InvoiceRow, on: boolean) {
     setSelected((prev) => {
       const next = new Map(prev);
@@ -351,6 +359,17 @@ export default function BillingPage() {
       toast.error("Could not prepare the invoices for printing");
     } finally {
       setIsPrinting(false);
+    }
+  }
+
+  async function onDownload(invoice: InvoiceRow) {
+    setIsDownloading(true);
+    try {
+      await downloadInvoice(invoice, studio);
+    } catch {
+      toast.error("Could not create the PDF");
+    } finally {
+      setIsDownloading(false);
     }
   }
 
@@ -697,13 +716,18 @@ export default function BillingPage() {
               </div>
             </div>
 
-            <div className="border rounded-md overflow-hidden">
+            <div className="border rounded-xl overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-muted">
                   <tr>
                     <th className="text-left px-3 py-2 font-medium">Description</th>
                     <th className="text-center px-3 py-2 font-medium w-24">Type</th>
                     <th className="text-right px-3 py-2 font-medium w-24">Amount</th>
+                    {detailInvoice.status === "DRAFT" && (
+                      <th className="w-10 px-1 py-2">
+                        <span className="sr-only">Remove</span>
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -716,6 +740,25 @@ export default function BillingPage() {
                       <td className={`px-3 py-2 text-right font-medium ${item.amountCents < 0 ? "text-green-600" : ""}`}>
                         {formatCurrency(item.amountCents)}
                       </td>
+                      {detailInvoice.status === "DRAFT" && (
+                        <td className="px-1 py-1 text-center">
+                          {item.custom && (
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={`Remove ${item.description}`}
+                              disabled={removingLineId === item.id}
+                              onClick={() => removeLine(detailInvoice.id, item.id)}
+                            >
+                              {removingLineId === item.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                              ) : (
+                                <Trash2 className="h-4 w-4 text-destructive" aria-hidden />
+                              )}
+                            </Button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -723,32 +766,35 @@ export default function BillingPage() {
                   <tr className="border-t-2 font-bold">
                     <td className="px-3 py-2" colSpan={2}>Total</td>
                     <td className="px-3 py-2 text-right">{formatCurrency(detailInvoice.totalCents)}</td>
+                    {detailInvoice.status === "DRAFT" && <td />}
                   </tr>
                 </tfoot>
               </table>
             </div>
 
+            {detailInvoice.status === "DRAFT" ? (
+              <InvoiceLineItemForm<InvoiceRow> invoiceId={detailInvoice.id} onAdded={onInvoiceChanged} />
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Charges and discounts can only be added while an invoice is a draft.
+              </p>
+            )}
+
             <div className="flex justify-between items-center pt-4 border-t">
               <div>
-                {typeof window !== "undefined" && PDFDownloadLink && InvoicePDFComponent && (
-                  <PDFDownloadLink
-                    document={
-                      <InvoicePDFComponent
-                        invoice={detailInvoice}
-                        studioName={studio.name}
-                        timeZone={studio.timezone}
-                      />
-                    }
-                    fileName={`invoice-${detailInvoice.id.slice(-8)}.pdf`}
-                  >
-                    {({ loading: pdfLoading }) => (
-                      <Button variant="outline" size="sm" disabled={pdfLoading}>
-                        <FileDown className="h-4 w-4 mr-2" />
-                        {pdfLoading ? "Generating PDF..." : "Download PDF"}
-                      </Button>
-                    )}
-                  </PDFDownloadLink>
-                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isDownloading}
+                  onClick={() => onDownload(detailInvoice)}
+                >
+                  {isDownloading ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden />
+                  ) : (
+                    <FileDown className="h-4 w-4 mr-2" aria-hidden />
+                  )}
+                  Download PDF
+                </Button>
               </div>
               <div className="flex gap-2">
                 {detailInvoice.status === "DRAFT" && (

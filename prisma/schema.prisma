@@ -419,6 +419,8 @@ model InvoiceLineItem {
   description String
   amountCents Int
   type        LineItemType
+  /// Added by hand by an admin (not produced by the billing engine)
+  custom      Boolean      @default(false)
   createdAt   DateTime     @default(now())
 }
 

@@ -48,3 +48,26 @@ export async function printInvoices(
   frame.src = url;
   document.body.appendChild(frame);
 }
+
+/** Builds the PDF for one invoice and saves it as a file. */
+export async function downloadInvoice(
+  invoice: PdfInvoice,
+  studio: { name?: string; timezone?: string }
+): Promise<void> {
+  const [{ pdf }, { InvoicePDF }] = await Promise.all([
+    import("@react-pdf/renderer"),
+    import("@/components/pdf/invoice-pdf"),
+  ]);
+  const blob = await pdf(
+    <InvoicePDF invoice={invoice} studioName={studio.name} timeZone={studio.timezone} />
+  ).toBlob();
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `invoice-${invoice.id.slice(-8)}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}

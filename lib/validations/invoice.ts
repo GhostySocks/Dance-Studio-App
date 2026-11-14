@@ -24,6 +24,26 @@ export const sendInvoicesSchema = z.object({
   ids: z.array(z.string().min(1)).min(1).max(500).optional(),
 });
 
+/**
+ * A line an admin adds to a draft invoice by hand: a charge (a costume fee, a
+ * late fee) or a discount, the latter as an amount or a percentage of the charges.
+ */
+export const invoiceLineItemSchema = z
+  .object({
+    kind: z.enum(["CHARGE", "DISCOUNT"]),
+    description: z.string().trim().min(1, "Enter a description").max(120, "Keep it under 120 characters"),
+    amountCents: z.number().int().min(1, "Enter an amount above zero").max(10_000_000).optional(),
+    percent: z.number().gt(0, "Enter a percentage above zero").max(100, "Cannot be more than 100%").optional(),
+  })
+  .refine((data) => data.kind !== "CHARGE" || (data.amountCents !== undefined && data.percent === undefined), {
+    message: "Enter an amount",
+    path: ["amountCents"],
+  })
+  .refine(
+    (data) => data.kind !== "DISCOUNT" || (data.amountCents !== undefined) !== (data.percent !== undefined),
+    { message: "Enter an amount or a percentage", path: ["amountCents"] }
+  );
+
 export const invoiceStatusSchema = z.object({
   status: z.enum(["DRAFT", "SENT", "PAID", "OVERDUE", "VOID"]),
 });

@@ -274,6 +274,146 @@ export async function markDraftInvoicesSent({ ids, actorId }: { ids?: string[]; 
   return { sentIds, skipped };
 }
 
+/** A problem the admin can fix; the message is safe to show. */
+export class InvoiceEditError extends Error {}
+
+const INVOICE_WITH_LINES = {
+  student: { select: { id: true, firstName: true, lastName: true } },
+  familyGroup: { select: { id: true, name: true } },
+  lineItems: { orderBy: { createdAt: "asc" } },
+  payments: { select: { id: true, amountCents: true, status: true } },
+} satisfies Prisma.InvoiceInclude;
+
+/**
+ * Adds a charge or a discount to a DRAFT invoice by hand and updates its total.
+ * A percentage discount is taken from the invoice's charges (its positive lines)
+ * as they stand now, and stored as a fixed amount.
+ */
+export async function addInvoiceLineItem({
+  invoiceId,
+  kind,
+  description,
+  amountCents,
+  percent,
+  actorId,
+}: {
+  invoiceId: string;
+  kind: "CHARGE" | "DISCOUNT";
+  description: string;
+  amountCents?: number;
+  percent?: number;
+  actorId: string;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const invoice = await tx.invoice.findUnique({
+      where: { id: invoiceId },
+      select: { status: true, lineItems: { select: { amountCents: true } } },
+    });
+    if (!invoice) throw new InvoiceEditError("Invoice not found");
+    if (invoice.status !== "DRAFT") {
+      throw new InvoiceEditError("Only draft invoices can be changed");
+    }
+
+    const amounts = invoice.lineItems.map((item) => item.amountCents);
+    const total = amounts.reduce((sum, n) => sum + n, 0);
+    const charges = amounts.filter((n) => n > 0).reduce((sum, n) => sum + n, 0);
+
+    let signed: number;
+    let label = description;
+    if (kind === "CHARGE") {
+      signed = amountCents ?? 0;
+    } else if (percent !== undefined) {
+      signed = -Math.round((charges * percent) / 100);
+      label = `${description} (${percent}%)`;
+    } else {
+      signed = -(amountCents ?? 0);
+    }
+    if (signed === 0) {
+      throw new InvoiceEditError("That discount comes to $0.00, so there is nothing to add");
+    }
+    if (total + signed < 0) {
+      throw new InvoiceEditError("That discount is more than the invoice total");
+    }
+
+    await tx.invoiceLineItem.create({
+      data: {
+        invoiceId,
+        description: label,
+        amountCents: signed,
+        type: kind === "CHARGE" ? "FEE" : "DISCOUNT",
+        custom: true,
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        actorId,
+        action: "INVOICE_LINE_ADDED",
+        entityType: "Invoice",
+        entityId: invoiceId,
+        meta: { description: label, amountCents: signed },
+      },
+    });
+    return tx.invoice.update({
+      where: { id: invoiceId },
+      data: { totalCents: total + signed },
+      include: INVOICE_WITH_LINES,
+    });
+  });
+}
+
+/**
+ * Removes a line an admin added by hand from a DRAFT invoice. Lines the billing
+ * engine produced stay: they are tied to what has been billed.
+ */
+export async function removeInvoiceLineItem({
+  invoiceId,
+  lineItemId,
+  actorId,
+}: {
+  invoiceId: string;
+  lineItemId: string;
+  actorId: string;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const invoice = await tx.invoice.findUnique({
+      where: { id: invoiceId },
+      select: {
+        status: true,
+        lineItems: { select: { id: true, amountCents: true, custom: true, description: true } },
+      },
+    });
+    if (!invoice) throw new InvoiceEditError("Invoice not found");
+    if (invoice.status !== "DRAFT") {
+      throw new InvoiceEditError("Only draft invoices can be changed");
+    }
+    const line = invoice.lineItems.find((item) => item.id === lineItemId);
+    if (!line) throw new InvoiceEditError("That line is no longer on the invoice");
+    if (!line.custom) {
+      throw new InvoiceEditError("Only lines you added yourself can be removed");
+    }
+    const total = invoice.lineItems.reduce((sum, item) => sum + item.amountCents, 0) - line.amountCents;
+    if (total < 0) {
+      throw new InvoiceEditError("Remove the discount first: without this charge the total would go below zero");
+    }
+
+    await tx.invoiceLineItem.delete({ where: { id: lineItemId } });
+    await tx.auditLog.create({
+      data: {
+        actorId,
+        action: "INVOICE_LINE_REMOVED",
+        entityType: "Invoice",
+        entityId: invoiceId,
+        meta: { description: line.description, amountCents: line.amountCents },
+      },
+    });
+    return tx.invoice.update({
+      where: { id: invoiceId },
+      data: { totalCents: total },
+      include: INVOICE_WITH_LINES,
+    });
+  });
+}
+
 export async function updateInvoiceStatus(
   id: string,
   status: "DRAFT" | "SENT" | "PAID" | "OVERDUE" | "VOID"
