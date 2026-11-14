@@ -53,8 +53,8 @@ export type ScheduleView = "list" | "calendar";
 
 function ViewToggle({ view, onChange }: { view: ScheduleView; onChange: (view: ScheduleView) => void }) {
   const options = [
-    { value: "list", label: "List", icon: List },
     { value: "calendar", label: "Calendar", icon: CalendarDays },
+    { value: "list", label: "List", icon: List },
   ] as const;
   return (
     <div role="group" aria-label="Schedule view" className="inline-flex rounded-full border border-border bg-white p-0.5">
@@ -93,7 +93,7 @@ export function ScheduleBrowser({
   timeZone: string;
   /** Hide search, filters and the view toggle (used by the embeddable widget). */
   compact?: boolean;
-  /** From the page URL (?view=calendar), so a link can open straight on the calendar. */
+  /** The public page opens on the calendar; ?view=list in its URL opens on the list. */
   initialView?: ScheduleView;
 }) {
   const [view, setView] = useState<ScheduleView>(initialView);
@@ -102,7 +102,7 @@ export function ScheduleBrowser({
     setView(next);
     // Keep the choice in the address bar so it survives a refresh and can be shared
     const url = new URL(window.location.href);
-    if (next === "calendar") url.searchParams.set("view", "calendar");
+    if (next === "list") url.searchParams.set("view", "list");
     else url.searchParams.delete("view");
     window.history.replaceState(null, "", url);
   }

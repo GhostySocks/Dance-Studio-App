@@ -14,7 +14,7 @@ export default async function SchedulePage({
   searchParams: { view?: string | string[] };
 }) {
   const [studio, sessions] = await Promise.all([getPublicStudio(), getPublicSchedule()]);
-  const initialView = searchParams.view === "calendar" ? "calendar" : "list";
+  const initialView = searchParams.view === "list" ? "list" : "calendar";
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
