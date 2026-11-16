@@ -52,7 +52,7 @@ async function main() {
 
   const adminUser = await prisma.user.create({
     data: {
-      email: "admin@dancestudio.com",
+      email: "admin@test.com",
       name: "Sarah Johnson",
       role: "ADMIN",
       passwordHash,
@@ -61,7 +61,7 @@ async function main() {
 
   const teacherUser1 = await prisma.user.create({
     data: {
-      email: "maria@dancestudio.com",
+      email: "maria@test.com",
       name: "Maria Garcia",
       role: "TEACHER",
       passwordHash,
@@ -70,7 +70,7 @@ async function main() {
 
   const teacherUser2 = await prisma.user.create({
     data: {
-      email: "james@dancestudio.com",
+      email: "james@test.com",
       name: "James Wilson",
       role: "TEACHER",
       passwordHash,
@@ -79,7 +79,7 @@ async function main() {
 
   const parentUser1 = await prisma.user.create({
     data: {
-      email: "lisa@example.com",
+      email: "lisa@test.com",
       name: "Lisa Thompson",
       role: "PARENT",
       passwordHash,
@@ -88,7 +88,7 @@ async function main() {
 
   const parentUser2 = await prisma.user.create({
     data: {
-      email: "michael@example.com",
+      email: "michael@test.com",
       name: "Michael Chen",
       role: "PARENT",
       passwordHash,
@@ -97,7 +97,7 @@ async function main() {
 
   const studentUser = await prisma.user.create({
     data: {
-      email: "alex@example.com",
+      email: "alex@test.com",
       name: "Alex Rivera",
       role: "STUDENT",
       passwordHash,
@@ -221,7 +221,7 @@ async function main() {
       lastName: "Rivera",
       dateOfBirth: new Date(now.getUTCFullYear() - 22, 5, 30),
       userId: studentUser.id,
-      email: "alex@example.com",
+      email: "alex@test.com",
     },
   });
 

@@ -62,6 +62,23 @@ export function summarizeTaught(classes: TaughtClass[]): TeacherReportTotals {
   };
 }
 
+/** A span of studio calendar days ("YYYY-MM-DD"), both included. */
+export interface DayPeriod {
+  startDay: string;
+  endDay: string;
+}
+
+/** Do two periods share at least one day? Day strings sort the way the days do. */
+export function periodsOverlap(a: DayPeriod, b: DayPeriod): boolean {
+  return a.startDay <= b.endDay && b.startDay <= a.endDay;
+}
+
+/** The day after a studio calendar day. */
+export function nextDay(day: string): string {
+  const [year, month, date] = day.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, date + 1)).toISOString().slice(0, 10);
+}
+
 export type PayBasis = "PER_CLASS" | "PER_HOUR";
 
 /** What the teacher is owed at a rate (in cents) per class or per hour, in cents. */

@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { StudioLogo } from "@/components/studio-logo";
+
 /** Centered card used by the sign-in related pages (forgot/reset password, verify email). */
 export function AuthCard({
   title,
@@ -14,12 +16,8 @@ export function AuthCard({
     <main className="flex min-h-screen items-center justify-center bg-background p-6">
       <div className="mx-auto w-full max-w-sm space-y-6">
         <div className="space-y-2 text-center">
-          <Link
-            href="/"
-            aria-label="Home"
-            className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-lg font-bold text-primary-foreground"
-          >
-            DS
+          <Link href="/" className="mx-auto mb-4 block w-fit">
+            <StudioLogo variant="stacked" alt="Boss Dance Studio home" className="h-28" priority />
           </Link>
           <h1 className="text-2xl font-bold">{title}</h1>
           {description && <p className="text-sm text-muted-foreground">{description}</p>}

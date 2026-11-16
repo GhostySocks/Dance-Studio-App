@@ -26,12 +26,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid period" }, { status: 400 });
     }
 
-    const { timezone } = await getStudioInfo();
+    const { timezone, name } = await getStudioInfo();
     const report = await getTeacherReport({
       teacherId: teacherId,
       startDay: parsed.data.start,
       endDay: parsed.data.end,
       timeZone: timezone,
+      studioName: name,
     });
     if (!report) return NextResponse.json({ error: "Teacher not found" }, { status: 404 });
     return NextResponse.json({ data: report });

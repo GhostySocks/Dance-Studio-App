@@ -4,6 +4,7 @@ import { useState } from "react";
 import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { StudioLogo } from "@/components/studio-logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,12 +46,12 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-background">
       <div className="mx-auto w-full max-w-sm space-y-6 p-6">
         <div className="space-y-2 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-lg">
-            DS
-          </div>
-          <h1 className="text-2xl font-bold">Dance Studio</h1>
+          <Link href="/" className="mx-auto mb-4 block w-fit">
+            <StudioLogo variant="stacked" alt="Boss Dance Studio home" className="h-28" priority />
+          </Link>
+          <h1 className="text-2xl font-bold">Sign in</h1>
           <p className="text-muted-foreground text-sm">
-            Sign in to your account
+            Welcome back. Sign in to your account.
           </p>
         </div>
         <form onSubmit={onSubmit} className="space-y-4">

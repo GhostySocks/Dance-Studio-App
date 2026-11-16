@@ -1,6 +1,7 @@
 "use client";
 
 import type { PdfInvoice } from "@/components/pdf/invoice-pdf";
+import { pdfLogoSrc } from "@/components/pdf/logo";
 
 const FRAME_ID = "invoice-print-frame";
 let lastUrl: string | null = null;
@@ -20,7 +21,7 @@ export async function printInvoices(
     import("@/components/pdf/invoice-pdf"),
   ]);
   const blob = await pdf(
-    <InvoicesPDF invoices={invoices} studioName={studio.name} timeZone={studio.timezone} />
+    <InvoicesPDF invoices={invoices} studioName={studio.name} timeZone={studio.timezone} logoSrc={pdfLogoSrc()} />
   ).toBlob();
 
   // Clear up the previous print job (it cannot be removed while its dialog is open)
@@ -59,7 +60,7 @@ export async function downloadInvoice(
     import("@/components/pdf/invoice-pdf"),
   ]);
   const blob = await pdf(
-    <InvoicePDF invoice={invoice} studioName={studio.name} timeZone={studio.timezone} />
+    <InvoicePDF invoice={invoice} studioName={studio.name} timeZone={studio.timezone} logoSrc={pdfLogoSrc()} />
   ).toBlob();
 
   const url = URL.createObjectURL(blob);

@@ -23,6 +23,7 @@ import {
   CalendarRange,
   ClipboardList,
 } from "lucide-react";
+import { StudioLogo } from "@/components/studio-logo";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -130,18 +131,13 @@ export function AppSidebar({
         collapsed ? "w-16" : "w-64"
       )}
     >
-      <div className="flex h-14 items-center border-b px-4">
-        <Link href="/" className="flex items-center gap-2.5 overflow-hidden">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground font-bold text-sm shadow-sm">
-            DS
-          </div>
-          {!collapsed && (
-            <motion.span
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="font-semibold text-lg whitespace-nowrap"
-            >
-              Dance Studio
+      <div className={cn("flex h-14 items-center border-b", collapsed ? "px-2" : "px-4")}>
+        <Link href="/" className={cn("flex items-center overflow-hidden", collapsed && "mx-auto")}>
+          {collapsed ? (
+            <StudioLogo variant="stacked" alt="Boss Dance Studio" className="h-10" priority />
+          ) : (
+            <motion.span initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}>
+              <StudioLogo alt="Boss Dance Studio" className="h-9" priority />
             </motion.span>
           )}
         </Link>
@@ -162,7 +158,7 @@ export function AppSidebar({
               className={cn("space-y-0.5", index > 0 && (collapsed ? "mt-2 border-t pt-2" : "mt-4"))}
             >
               {group.label && !collapsed && (
-                <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                <p className="px-3 pb-1 text-[11px] font-bold uppercase tracking-widest text-foreground">
                   {group.label}
                 </p>
               )}

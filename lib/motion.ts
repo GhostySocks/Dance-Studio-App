@@ -30,3 +30,37 @@ export const slideInRight: Variants = {
  * section crosses the window. Small on purpose: it should be felt, not noticed.
  */
 export const parallaxShift = ["-9%", "9%"];
+
+/** How long a carousel stays on one page before moving to the next. */
+export const CAROUSEL_INTERVAL_MS = 7000;
+
+/**
+ * Tiles of a carousel page. `custom` is the tile's position on the page, so the
+ * tiles move one after another. Leaving, a tile tips back and lifts away;
+ * arriving, it swings up from below (always from the same starting pose, wherever
+ * it was left), after the old page has started to clear.
+ */
+export const carouselTile: Variants = {
+  shown: (i: number) => ({
+    opacity: [0, 1],
+    y: [90, 0],
+    rotateX: [-75, 0],
+    scale: [0.8, 1],
+    visibility: "visible",
+    transition: { delay: 0.22 + i * 0.08, type: "spring", stiffness: 110, damping: 15, opacity: { delay: 0.22 + i * 0.08, duration: 0.3 } },
+  }),
+  away: (i: number) => ({
+    opacity: 0,
+    y: -70,
+    rotateX: 70,
+    scale: 0.82,
+    transition: { delay: i * 0.06, duration: 0.4, ease: "easeIn" },
+    transitionEnd: { visibility: "hidden" },
+  }),
+};
+
+/** The same change with reduced motion: a plain cross-fade. */
+export const carouselTileReduced: Variants = {
+  shown: { opacity: 1, visibility: "visible", transition: { duration: 0.2 } },
+  away: { opacity: 0, transition: { duration: 0.2 }, transitionEnd: { visibility: "hidden" } },
+};

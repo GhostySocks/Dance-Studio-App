@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { FileDown, Loader2 } from "lucide-react";
+import { CheckCircle2, FileDown, FileText, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { TeacherPaymentForm } from "@/components/forms/teacher-payment-form";
+import { Modal } from "@/components/modal";
 import { PageHeader } from "@/components/page-header";
 import { RequiredMark } from "@/components/required-mark";
 import { StyledSelect } from "@/components/styled-select";
@@ -12,8 +14,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { TeacherPaymentRecord } from "@/lib/db/teacher-payments";
 import type { TeacherReport } from "@/lib/db/teacher-report";
-import { payOwedCents, type PayBasis } from "@/lib/teacher-report";
+import { nextDay, payOwedCents, periodsOverlap, type PayBasis } from "@/lib/teacher-report";
 import { formatCurrency } from "@/lib/utils";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -35,6 +38,16 @@ function formatHours(minutes: number) {
   return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
 }
 
+/** A studio calendar day ("YYYY-MM-DD") written out, e.g. "Nov 1, 2026". */
+function dayLabel(day: string) {
+  const [year, month, date] = day.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(
+    new Date(Date.UTC(year, month - 1, date))
+  );
+}
+const periodLabel = (period: { startDay: string; endDay: string }) =>
+  `${dayLabel(period.startDay)} – ${dayLabel(period.endDay)}`;
+
 function csvCell(value: string | number) {
   const text = String(value);
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
@@ -53,6 +66,11 @@ export function TeacherPayReport({ teachers }: { teachers?: { id: string; name: 
   const [loading, setLoading] = useState(false);
   const [basis, setBasis] = useState<PayBasis>("PER_CLASS");
   const [rate, setRate] = useState("");
+  const [payments, setPayments] = useState<TeacherPaymentRecord[]>([]);
+  const [recording, setRecording] = useState(false);
+  const [removing, setRemoving] = useState<TeacherPaymentRecord | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   const ready = (!admin || teacherId !== "") && start !== "" && end !== "" && end >= start;
 
@@ -81,7 +99,38 @@ export function TeacherPayReport({ teachers }: { teachers?: { id: string; name: 
     load();
   }, [load]);
 
+  const loadPayments = useCallback(async () => {
+    if (admin && teacherId === "") {
+      setPayments([]);
+      return;
+    }
+    try {
+      const res = await fetch(admin ? `/api/teachers/${teacherId}/payments` : "/api/teachers/me/payments");
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(typeof json?.error === "string" ? json.error : "Failed to load payments");
+      setPayments(json.data);
+    } catch (err: unknown) {
+      setPayments([]);
+      toast.error(err instanceof Error ? err.message : "Failed to load payments");
+    }
+  }, [admin, teacherId]);
+
+  useEffect(() => {
+    loadPayments();
+  }, [loadPayments]);
+
   const timeZone = report?.timeZone;
+  // Today as a studio calendar day (the browser's own day until the report has loaded)
+  const today = timeZone
+    ? new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())
+    : toDay(new Date());
+  const selected = { startDay: start, endDay: end };
+  /** The payment recorded for exactly this period, if there is one */
+  const paid = payments.find((p) => p.startDay === start && p.endDay === end) ?? null;
+  /** Payments that cover only some of these days: paying this period would pay those days twice */
+  const clashes = paid ? [] : payments.filter((p) => periodsOverlap(p, selected));
+  const notFinished = end > today;
+  const lastPaidDay = payments.reduce((latest, p) => (p.endDay > latest ? p.endDay : latest), "");
   const formatDate = (iso: string) =>
     new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone }).format(new Date(iso));
   const formatTime = (iso: string) =>
@@ -89,6 +138,47 @@ export function TeacherPayReport({ teachers }: { teachers?: { id: string; name: 
 
   const rateCents = Math.round(Number(rate) * 100);
   const owed = report ? payOwedCents(report.totals, basis, rateCents) : 0;
+
+  async function downloadPdf() {
+    if (!report) return;
+    setPdfBusy(true);
+    try {
+      const { downloadTeacherStatement } = await import("@/components/pdf/teacher-statement-pdf");
+      const pay = paid
+        ? {
+            owedCents: paid.amountCents,
+            basis: (paid.basis as PayBasis | null) ?? undefined,
+            rateCents: paid.rateCents ?? undefined,
+            paidOn: paid.paidOn,
+            reference: paid.reference,
+          }
+        : admin && owed > 0
+          ? { owedCents: owed, basis, rateCents }
+          : null;
+      await downloadTeacherStatement(report, pay, report.studioName);
+    } catch {
+      toast.error("Could not create the PDF");
+    } finally {
+      setPdfBusy(false);
+    }
+  }
+
+  async function removePayment() {
+    if (!removing) return;
+    setRemoveBusy(true);
+    try {
+      const res = await fetch(`/api/teachers/${teacherId}/payments/${removing.id}`, { method: "DELETE" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(typeof json?.error === "string" ? json.error : "Could not remove the payment");
+      toast.success("Payment record removed");
+      setRemoving(null);
+      loadPayments();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Could not remove the payment");
+    } finally {
+      setRemoveBusy(false);
+    }
+  }
 
   function exportCsv() {
     if (!report) return;
@@ -159,6 +249,14 @@ export function TeacherPayReport({ teachers }: { teachers?: { id: string; name: 
           <FileDown className="mr-2 h-4 w-4" aria-hidden />
           Export CSV
         </Button>
+        <Button onClick={downloadPdf} disabled={!report || pdfBusy}>
+          {pdfBusy ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <FileText className="mr-2 h-4 w-4" aria-hidden />
+          )}
+          Download PDF
+        </Button>
       </PageHeader>
 
       <Card className="rounded-2xl border-0 shadow-md">
@@ -211,6 +309,18 @@ export function TeacherPayReport({ teachers }: { teachers?: { id: string; name: 
                 {label}
               </Button>
             ))}
+            {admin && lastPaidDay !== "" && lastPaidDay < today && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setStart(nextDay(lastPaidDay));
+                  setEnd(today);
+                }}
+              >
+                Since last payment
+              </Button>
+            )}
           </div>
           {end !== "" && start !== "" && end < start && (
             <p className="basis-full text-xs text-destructive">The end date cannot be before the start date.</p>
@@ -230,6 +340,29 @@ export function TeacherPayReport({ teachers }: { teachers?: { id: string; name: 
         </Card>
       ) : (
         <>
+          {paid && (
+            <p className="flex items-start gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              <span>
+                This period was paid on {dayLabel(paid.paidOn)}: <strong>{formatCurrency(paid.amountCents)}</strong>
+                {paid.reference ? ` (${paid.reference})` : ""}.
+              </span>
+            </p>
+          )}
+          {admin && clashes.length > 0 && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p className="font-medium">Some of these days have already been paid.</p>
+              <ul className="mt-1 list-disc pl-5">
+                {clashes.map((clash) => (
+                  <li key={clash.id}>
+                    {periodLabel(clash)}: {formatCurrency(clash.amountCents)}, paid {dayLabel(clash.paidOn)}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1">Change the dates so they do not overlap before paying for this period.</p>
+            </div>
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Card className="rounded-2xl border-0 shadow-md">
               <CardContent className="pt-6">
@@ -283,9 +416,22 @@ export function TeacherPayReport({ teachers }: { teachers?: { id: string; name: 
                       {owed > 0 ? formatCurrency(owed) : "-"}
                     </p>
                   </div>
-                  <p className="basis-full text-xs text-muted-foreground">
-                    Enter a rate to work out the total. The rate is not saved, and nothing is paid through the app.
+                  <p className="flex-1 basis-64 text-xs text-muted-foreground">
+                    {paid
+                      ? "A payment is already recorded for this period."
+                      : clashes.length > 0
+                        ? "Change the dates before recording a payment: some of these days are already paid."
+                        : notFinished
+                          ? "This period has not finished. End it today or earlier to record a payment."
+                          : "Enter a rate to work out the total. Nothing is paid through the app: record the payment once the check is written."}
                   </p>
+                  <Button
+                    size="sm"
+                    disabled={paid !== null || clashes.length > 0 || notFinished}
+                    onClick={() => setRecording(true)}
+                  >
+                    Record payment
+                  </Button>
                 </CardContent>
               </Card>
             )}
@@ -414,6 +560,140 @@ export function TeacherPayReport({ teachers }: { teachers?: { id: string; name: 
           )}
         </>
       )}
+
+      {(!admin || teacherId !== "") && (
+        <Card className="rounded-2xl border-0 shadow-md">
+          <CardHeader>
+            <CardTitle>Payment history</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {payments.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                {admin ? "No payments recorded for this teacher yet." : "No payments have been recorded yet."}
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted text-left">
+                    <tr>
+                      <th scope="col" className="px-3 py-2 font-medium">Period</th>
+                      <th scope="col" className="px-3 py-2 text-right font-medium">Classes</th>
+                      <th scope="col" className="px-3 py-2 text-right font-medium">Time</th>
+                      <th scope="col" className="px-3 py-2 text-right font-medium">Amount</th>
+                      <th scope="col" className="px-3 py-2 font-medium">Paid on</th>
+                      <th scope="col" className="px-3 py-2 font-medium">Reference</th>
+                      {admin && (
+                        <th scope="col" className="px-3 py-2">
+                          <span className="sr-only">Actions</span>
+                        </th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payments.map((payment) => (
+                      <tr key={payment.id} className="border-t">
+                        <td className="whitespace-nowrap px-3 py-2">
+                          <button
+                            type="button"
+                            className="font-medium text-primary hover:underline"
+                            title="Show this period"
+                            onClick={() => {
+                              setStart(payment.startDay);
+                              setEnd(payment.endDay);
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                          >
+                            {periodLabel(payment)}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2 text-right">{payment.classes}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right">{formatHours(payment.minutes)}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right font-medium">
+                          {formatCurrency(payment.amountCents)}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2">{dayLabel(payment.paidOn)}</td>
+                        <td className="px-3 py-2">
+                          {payment.reference ?? ""}
+                          {payment.note && <span className="block text-xs text-muted-foreground">{payment.note}</span>}
+                        </td>
+                        {admin && (
+                          <td className="px-3 py-2 text-right">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={`Remove the payment for ${periodLabel(payment)}`}
+                              title="Remove"
+                              onClick={() => setRemoving(payment)}
+                            >
+                              <Trash2 className="h-4 w-4" aria-hidden />
+                            </Button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p className="mt-3 text-xs text-muted-foreground">
+              Choose a period to see its classes and download its statement.
+              {admin ? " Paid periods cannot overlap, so no class is paid twice." : ""}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      <Modal
+        open={recording && report !== null}
+        onClose={() => setRecording(false)}
+        title="Record a payment"
+        description={
+          report
+            ? `${report.teacher.name} · ${periodLabel(selected)} · ${report.totals.classes} ${
+                report.totals.classes === 1 ? "class" : "classes"
+              }, ${formatHours(report.totals.minutes)}`
+            : undefined
+        }
+      >
+        <TeacherPaymentForm
+          teacherId={teacherId}
+          start={start}
+          end={end}
+          owedCents={owed}
+          basis={basis}
+          rateCents={rateCents}
+          today={today}
+          onCancel={() => setRecording(false)}
+          onRecorded={() => {
+            setRecording(false);
+            loadPayments();
+          }}
+        />
+      </Modal>
+
+      <Modal
+        open={removing !== null}
+        onClose={() => setRemoving(null)}
+        title="Remove this payment record?"
+        description={
+          removing
+            ? `${periodLabel(removing)} · ${formatCurrency(removing.amountCents)}, paid ${dayLabel(removing.paidOn)}`
+            : undefined
+        }
+      >
+        <p className="text-sm text-muted-foreground">
+          Only do this if the payment was entered by mistake. The period will count as unpaid again.
+        </p>
+        <div className="mt-4 flex justify-end gap-2 border-t pt-4">
+          <Button variant="outline" onClick={() => setRemoving(null)} disabled={removeBusy}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={removePayment} disabled={removeBusy}>
+            {removeBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
+            Remove record
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -15,6 +15,7 @@ export interface TeacherReport {
   startDay: string;
   endDay: string;
   timeZone: string;
+  studioName: string;
   classes: TaughtClass[];
   totals: TeacherReportTotals;
   /** This teacher's own classes that a substitute taught in the period (not counted above) */
@@ -39,11 +40,13 @@ export async function getTeacherReport({
   startDay,
   endDay,
   timeZone,
+  studioName = "Dance Studio",
 }: {
   teacherId: string;
   startDay: string;
   endDay: string;
   timeZone: string;
+  studioName?: string;
 }): Promise<TeacherReport | null> {
   const now = new Date();
   const periodEnd = endOfDayIn(timeZone, endDay);
@@ -121,6 +124,7 @@ export async function getTeacherReport({
     startDay,
     endDay,
     timeZone,
+    studioName,
     classes,
     totals: summarizeTaught(classes),
     covered,

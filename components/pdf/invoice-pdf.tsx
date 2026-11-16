@@ -2,6 +2,7 @@
 
 import {
   Document,
+  Image as PdfImage,
   Page,
   Text,
   View,
@@ -14,6 +15,7 @@ const styles = StyleSheet.create({
   page: { padding: 40, fontFamily: "Helvetica", fontSize: 10 },
   header: { marginBottom: 30 },
   studioName: { fontSize: 18, fontWeight: "bold", marginBottom: 4 },
+  logo: { height: 34, width: 163, marginBottom: 10 },
   invoiceTitle: { fontSize: 14, color: "#666", marginBottom: 20 },
   row: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
   label: { color: "#666" },
@@ -80,12 +82,14 @@ interface InvoicePDFProps {
   studioName?: string;
   /** Studio timezone, so the dates match the rest of the app. */
   timeZone?: string;
+  /** Address of the wide logo (PNG); the studio name is written out without it */
+  logoSrc?: string;
 }
 
 const DEFAULT_STUDIO = "Dance Studio";
 
 /** One invoice on its own page. */
-function InvoicePage({ invoice, studioName = DEFAULT_STUDIO, timeZone }: InvoicePDFProps) {
+function InvoicePage({ invoice, studioName = DEFAULT_STUDIO, timeZone, logoSrc }: InvoicePDFProps) {
   const billTo = invoice.familyGroup
     ? invoice.familyGroup.name
     : invoice.student
@@ -95,7 +99,7 @@ function InvoicePage({ invoice, studioName = DEFAULT_STUDIO, timeZone }: Invoice
   return (
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
-          <Text style={styles.studioName}>{studioName}</Text>
+          {logoSrc ? <PdfImage src={logoSrc} style={styles.logo} /> : <Text style={styles.studioName}>{studioName}</Text>}
           <Text style={styles.invoiceTitle}>INVOICE</Text>
         </View>
 
@@ -167,15 +171,17 @@ export function InvoicesPDF({
   invoices,
   studioName,
   timeZone,
+  logoSrc,
 }: {
   invoices: PdfInvoice[];
   studioName?: string;
   timeZone?: string;
+  logoSrc?: string;
 }) {
   return (
     <Document>
       {invoices.map((invoice) => (
-        <InvoicePage key={invoice.id} invoice={invoice} studioName={studioName} timeZone={timeZone} />
+        <InvoicePage key={invoice.id} invoice={invoice} studioName={studioName} timeZone={timeZone} logoSrc={logoSrc} />
       ))}
     </Document>
   );

@@ -182,6 +182,8 @@ Follow these on every file, every session, without exception.
 - Public pages and the widget read data only through `lib/db/public.ts`. Those functions return class/session info and spot counts — never student, family or enrollment records.
 - Public pages are `force-dynamic` (set in `app/(public)/layout.tsx`) so availability is live and builds do not need the database.
 - `/schedule` has a Calendar / List toggle and opens on the calendar (`?view=list` opens on the list). Both views share the same filters. The calendar is a custom month grid (`ScheduleCalendar`, `lib/calendar-grid.ts`) that works on studio-timezone day strings; on phones each day shows a count instead of class names.
+- `/classes` is a grid of every active class (`ClassCard`); a class page links back to it. The home page shows the classes six at a time in `ClassCarousel` (rotates every `CAROUSEL_INTERVAL_MS`, pauses on hover or focus, cross-fades and stays put with reduced motion); its last page reaches back so it is always full.
+- The studio logos are `public/images/logo-horizontal.png` and `logo-stacked.png`, shown with `StudioLogo` (`components/studio-logo.tsx`) and on PDFs through `pdfLogoSrc()`.
 - Dates on public pages are formatted in the studio timezone with the helpers in `lib/schedule-format.ts`.
 - `/api/register` only ever creates PARENT or STUDENT accounts; the role is decided on the server.
 - Role → landing page mapping lives in `lib/portal.ts` (`portalHome`).
@@ -213,6 +215,10 @@ Follow these on every file, every session, without exception.
 - The admin student form (`HouseholdFields`) asks for the guardian explicitly: an existing one, a new one with contact details, or none. A new guardian gets a PARENT account with no password and, if ticked, a set-password link.
 - A family group can be picked, created from the same form, or skipped. Whenever a student is saved with both a guardian and a family group, the guardian is added to that group so they can see its invoices.
 - Student, new guardian and new family group are saved in one transaction (`lib/db/household.ts`): if any part fails (for example the guardian email is already in use), nothing is created.
+
+### Portal schedule
+- The parent and student Schedule page (`components/portal/schedule-view.tsx`) has a **My classes / All classes** toggle. All classes lists every upcoming class (`GET /api/portal/schedule` → `getPortalClassBrowser`, which adds the account's own bookings and unused makeups to the public schedule; other families are only ever counted).
+- From All classes a dancer can be signed up for one date as a paid single class (`POST /api/portal/enrollments`, only when the class has `dropInEnabled`; a full class offers the waitlist) or as a makeup for a missed class (`POST /api/makeups`, needs a free spot, also allowed for term-only classes). What is offered is decided by `bookingChoices` in `lib/portal-schedule.ts` (tested); the endpoints enforce the same rules.
 
 ### Email your teacher
 - Parents and adult students message a teacher through `POST /api/portal/teacher-messages`; the server looks up the teacher and sends the email with reply-to set to the sender. **A teacher email address must never be sent to a parent or student browser** (portal queries select the teacher `id` and name only).
@@ -288,6 +294,7 @@ Follow these on every file, every session, without exception.
 | Invoice | id, studentId?, familyGroupId?, periodStart, periodEnd, status, totalCents |
 | InvoiceLineItem | id, invoiceId, description, amountCents, type (TUITION / DISCOUNT / SCHOLARSHIP / FEE) |
 | Payment | id, invoiceId, amountCents, stripePaymentIntentId, status |
+| TeacherPayment | id, teacherId, startDay, endDay, classes, minutes, basis?, rateCents?, amountCents, paidOn, reference? |
 | Scholarship | id, name, studentId?, familyGroupId?, type (PERCENT / FIXED / WAIVER), value, startDate, endDate |
 | PricingRule | id, studioId?, familyGroupId?, name, triggerCount, discountType, discountValue |
 | AuditLog | id, actorId, action, entityType, entityId, meta (JSON), createdAt |
@@ -364,7 +371,9 @@ Admin can bypass with an explicit `force: true` flag.
 - Pay report: a substituted class counts for the substitute (tagged "Sub for …"); the regular teacher report lists it under "Taught by a substitute" and does not count it.
 
 ### Teacher pay report
-- Teachers are contractors paid outside the app. `/admin/teacher-pay` (admin, any teacher) and `/teacher/report` (own classes only, looked up from the session) list the classes taught between two studio days with totals (`getTeacherReport`, `lib/teacher-report.ts`). A class counts once it has started; closed days are excluded. The admin page can apply a per-class or per-hour rate to get a total, but **no pay rate is stored** and nothing is paid through the app.
+- Teachers are contractors paid outside the app. `/admin/teacher-pay` (admin, any teacher) and `/teacher/report` (own classes only, looked up from the session) list the classes taught between two studio days with totals (`getTeacherReport`, `lib/teacher-report.ts`). A class counts once it has started; closed days are excluded. The admin page can apply a per-class or per-hour rate to get a total, but **no pay rate is stored per teacher** and nothing is paid through the app.
+- **Download PDF** builds a statement in the browser to go out with the check (`components/pdf/teacher-statement-pdf.tsx`, US Letter): classes taught, totals and, when a rate was entered or the period is paid, the pay.
+- **Payment history** (`TeacherPayment`, `lib/db/teacher-payments.ts`, `/api/teachers/[id]/payments`, teachers read their own at `/api/teachers/me/payments`): once the check is written an admin records the payment for the period (amount, date paid, check number). It keeps the class and time totals and any rate used at that moment. **Paid periods for one teacher can never overlap, and a period that has not finished cannot be paid** (`recordTeacherPayment`, tested in `tests/teacher-payments.test.ts`); keep both checks. A record entered by mistake can be removed, which makes the period unpaid again. "Since last payment" sets the dates to the day after the last paid period through today.
 
 ### Invoice Status Flow
 ```

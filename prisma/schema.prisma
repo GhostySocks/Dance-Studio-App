@@ -244,8 +244,36 @@ model Teacher {
   sessions    ClassSession[] @relation("SessionTeacher")
   /// Class dates this teacher normally takes that a substitute taught instead
   coveredSessions ClassSession[] @relation("SubstituteFor")
+  payments    TeacherPayment[]
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
+}
+
+/// A payment the studio made to a teacher (a contractor) outside the app, kept
+/// so the same days are never paid twice.
+model TeacherPayment {
+  id           String   @id @default(cuid())
+  teacher      Teacher  @relation(fields: [teacherId], references: [id])
+  teacherId    String
+  /// Studio calendar days covered ("YYYY-MM-DD"), both included
+  startDay     String
+  endDay       String
+  /// What the report showed when the payment was recorded
+  classes      Int
+  minutes      Int
+  /// "PER_CLASS" or "PER_HOUR", when a rate was used to work out the amount
+  basis        String?
+  rateCents    Int?
+  amountCents  Int
+  /// Studio calendar day the payment was made
+  paidOn       String
+  /// Check number or other reference
+  reference    String?
+  note         String?
+  recordedById String?
+  createdAt    DateTime @default(now())
+
+  @@index([teacherId, startDay, endDay])
 }
 
 model Room {

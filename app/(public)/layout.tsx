@@ -2,21 +2,12 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 
 import { LinkButton } from "@/components/link-button";
+import { StudioLogo } from "@/components/studio-logo";
 import { authOptions } from "@/lib/auth";
 import { getPublicStudio } from "@/lib/db/public";
 import { portalHome } from "@/lib/portal";
 
 export const dynamic = "force-dynamic";
-
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter((w) => /^[A-Za-z]/.test(w))
-    .map((w) => w[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
 
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   const [studio, session] = await Promise.all([getPublicStudio(), getServerSession(authOptions)]);
@@ -31,13 +22,16 @@ export default async function PublicLayout({ children }: { children: React.React
       </a>
       <header className="sticky top-0 z-30 border-b bg-white/90 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-          <Link href="/" className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-sm font-bold text-primary-foreground shadow-sm">
-              {initials(studio.name) || "DS"}
-            </span>
-            <span className="hidden truncate text-base font-semibold sm:block">{studio.name}</span>
+          <Link href="/" className="flex shrink-0 items-center">
+            <StudioLogo alt={studio.name} className="h-8 sm:h-10" priority />
           </Link>
           <nav aria-label="Main" className="flex items-center gap-1 sm:gap-2">
+            <Link
+              href="/classes"
+              className="rounded-full px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              Classes
+            </Link>
             <Link
               href="/schedule"
               className="rounded-full px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
@@ -71,7 +65,7 @@ export default async function PublicLayout({ children }: { children: React.React
 
       <footer className="border-t bg-white">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p className="font-medium text-foreground">{studio.name}</p>
+          <StudioLogo alt={studio.name} className="h-8 self-start sm:self-auto" />
           <div className="flex flex-wrap gap-x-6 gap-y-1">
             {studio.address && <span>{studio.address}</span>}
             {studio.phone && <a href={`tel:${studio.phone}`} className="hover:text-foreground">{studio.phone}</a>}

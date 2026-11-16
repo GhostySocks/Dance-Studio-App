@@ -33,11 +33,11 @@ export default async function ClassDetailPage({ params }: { params: { id: string
   return (
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
       <Link
-        href="/schedule"
+        href="/classes"
         className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" aria-hidden />
-        Back to schedule
+        Back to classes
       </Link>
 
       <div className="mt-6 rounded-2xl border border-border/50 bg-white p-6 shadow-sm sm:p-8">
