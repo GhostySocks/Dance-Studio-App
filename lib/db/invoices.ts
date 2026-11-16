@@ -446,6 +446,100 @@ export async function updateInvoiceStatus(
   });
 }
 
+/**
+ * Brings back an invoice that was voided by mistake. It returns as a DRAFT (or as
+ * SENT if a payment was ever recorded against it), so it can be checked and sent
+ * again. Refused when the same family or student has been invoiced again for an
+ * overlapping period since, because restoring it would bill the same classes twice.
+ */
+export async function restoreVoidedInvoice(id: string, actorId: string) {
+  return prisma.$transaction(async (tx) => {
+    const invoice = await tx.invoice.findUnique({
+      where: { id },
+      select: {
+        status: true,
+        studentId: true,
+        familyGroupId: true,
+        periodStart: true,
+        periodEnd: true,
+        _count: { select: { payments: true } },
+      },
+    });
+    if (!invoice) throw new InvoiceEditError("Invoice not found");
+    if (invoice.status !== "VOID") throw new InvoiceEditError("Only a void invoice can be restored");
+
+    const replacement = await tx.invoice.findFirst({
+      where: {
+        id: { not: id },
+        status: { not: "VOID" },
+        studentId: invoice.studentId,
+        familyGroupId: invoice.familyGroupId,
+        periodStart: { lte: invoice.periodEnd },
+        periodEnd: { gte: invoice.periodStart },
+      },
+      select: { id: true },
+    });
+    if (replacement) {
+      throw new InvoiceEditError(
+        "Another invoice now covers this period for the same account, so restoring this one would bill twice. Void that invoice first if this is the one to keep."
+      );
+    }
+
+    const status = invoice._count.payments > 0 ? ("SENT" as const) : ("DRAFT" as const);
+    await tx.auditLog.create({
+      data: { actorId, action: "INVOICE_RESTORED", entityType: "Invoice", entityId: id, meta: { status } },
+    });
+    return tx.invoice.update({ where: { id }, data: { status }, include: INVOICE_WITH_LINES });
+  });
+}
+
+/**
+ * Copies an invoice into a new DRAFT for the same family or student: same period,
+ * due date and lines. The copied lines are marked as hand-added so any of them can
+ * be removed or added to before it is sent. The copy is not tied to the term
+ * instalments the original billed, so it never changes what is billed later.
+ */
+export async function duplicateInvoice(id: string, actorId: string) {
+  return prisma.$transaction(async (tx) => {
+    const source = await tx.invoice.findUnique({
+      where: { id },
+      select: {
+        studentId: true,
+        familyGroupId: true,
+        periodStart: true,
+        periodEnd: true,
+        dueDate: true,
+        lineItems: {
+          select: { description: true, amountCents: true, type: true },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+    if (!source) throw new InvoiceEditError("Invoice not found");
+
+    const { lineItems, ...header } = source;
+    const copy = await tx.invoice.create({
+      data: {
+        ...header,
+        status: "DRAFT",
+        totalCents: lineItems.reduce((sum, item) => sum + item.amountCents, 0),
+        lineItems: { create: lineItems.map((item) => ({ ...item, custom: true })) },
+      },
+      include: INVOICE_WITH_LINES,
+    });
+    await tx.auditLog.create({
+      data: {
+        actorId,
+        action: "INVOICE_DUPLICATED",
+        entityType: "Invoice",
+        entityId: copy.id,
+        meta: { copiedFrom: id },
+      },
+    });
+    return copy;
+  });
+}
+
 export async function deleteInvoice(id: string) {
   const invoice = await prisma.invoice.findUnique({
     where: { id },

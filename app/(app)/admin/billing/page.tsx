@@ -3,12 +3,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { toast } from "sonner";
-import { Plus, Send, CheckCircle, Ban, FileDown, Files, Loader2, Printer, Trash2 } from "lucide-react";
+import { Plus, Send, CheckCircle, Ban, FileDown, Files, Loader2, Printer, Trash2, Undo2, Copy, FileText, MoreHorizontal } from "lucide-react";
 
 import { GenerateAllInvoices } from "@/components/forms/generate-all-invoices";
 import { InvoiceLineItemForm } from "@/components/forms/invoice-line-item-form";
 import { downloadInvoice, printInvoices } from "@/components/pdf/print-invoices";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Modal } from "@/components/modal";
 import { PageHeader } from "@/components/page-header";
 import { DataTable } from "@/components/data-table";
@@ -111,6 +118,9 @@ export default function BillingPage() {
   const [isGenerating, setIsGenerating] = useState(false);
 
   const [detailInvoice, setDetailInvoice] = useState<InvoiceRow | null>(null);
+  /** The invoice the "void this?" confirmation is about; null when it is closed */
+  const [voiding, setVoiding] = useState<InvoiceRow | null>(null);
+  const [isVoiding, setIsVoiding] = useState(false);
 
   // Ticked invoices, kept by id so the selection survives changing page
   const [selected, setSelected] = useState<Map<string, InvoiceRow>>(new Map());
@@ -258,6 +268,44 @@ export default function BillingPage() {
       toast.error(err instanceof Error ? err.message : "Could not remove the line");
     } finally {
       setRemovingLineId(null);
+    }
+  }
+
+  async function confirmVoid() {
+    if (!voiding) return;
+    setIsVoiding(true);
+    await updateStatus(voiding.id, "VOID");
+    setIsVoiding(false);
+    setVoiding(null);
+  }
+
+  async function duplicateInvoice(invoice: InvoiceRow) {
+    try {
+      const res = await fetch(`/api/invoices/${invoice.id}/duplicate`, { method: "POST" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(typeof json?.error === "string" ? json.error : "Could not duplicate the invoice");
+      toast.success("Invoice duplicated as a new draft");
+      setPage(1);
+      fetchInvoices();
+      // Open the copy so it can be adjusted straight away
+      setDetailInvoice(json.data);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Could not duplicate the invoice");
+    }
+  }
+
+  async function restoreInvoice(invoice: InvoiceRow) {
+    try {
+      const res = await fetch(`/api/invoices/${invoice.id}/restore`, { method: "POST" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(typeof json?.error === "string" ? json.error : "Could not restore the invoice");
+      toast.success(`Invoice restored as ${json.data.status === "SENT" ? "sent" : "a draft"}`, {
+        description: json.data.status === "DRAFT" ? "Check it, then send it again." : undefined,
+      });
+      fetchInvoices();
+      if (detailInvoice?.id === invoice.id) setDetailInvoice(null);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Could not restore the invoice", { duration: 10000 });
     }
   }
 
@@ -441,50 +489,55 @@ export default function BillingPage() {
       },
       {
         id: "actions",
-        header: "Actions",
+        header: () => <span className="sr-only">Actions</span>,
         cell: ({ row }) => {
           const inv = row.original;
           return (
-            <div className="flex items-center gap-1">
-              {inv.status === "DRAFT" && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => updateStatus(inv.id, "SENT")}
-                  title="Send"
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
-              )}
-              {(inv.status === "SENT" || inv.status === "OVERDUE") && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => updateStatus(inv.id, "PAID")}
-                  title="Mark Paid"
-                >
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                </Button>
-              )}
-              {(inv.status === "DRAFT" || inv.status === "SENT") && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => updateStatus(inv.id, "VOID")}
-                  title="Void"
-                >
-                  <Ban className="h-4 w-4 text-destructive" />
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setDetailInvoice(inv)}
-                title="View Details"
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                aria-label={`Actions for the ${billToName(inv)} invoice`}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[popup-open]:bg-accent"
               >
-                <FileDown className="h-4 w-4" />
-              </Button>
-            </div>
+                <MoreHorizontal className="h-4 w-4" aria-hidden />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem onClick={() => setDetailInvoice(inv)}>
+                  <FileText aria-hidden />
+                  View details
+                </DropdownMenuItem>
+                {inv.status === "DRAFT" && (
+                  <DropdownMenuItem onClick={() => updateStatus(inv.id, "SENT")}>
+                    <Send aria-hidden />
+                    Send
+                  </DropdownMenuItem>
+                )}
+                {(inv.status === "SENT" || inv.status === "OVERDUE") && (
+                  <DropdownMenuItem onClick={() => updateStatus(inv.id, "PAID")}>
+                    <CheckCircle aria-hidden />
+                    Mark paid
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={() => duplicateInvoice(inv)}>
+                  <Copy aria-hidden />
+                  Duplicate
+                </DropdownMenuItem>
+                {inv.status === "VOID" && (
+                  <DropdownMenuItem onClick={() => restoreInvoice(inv)}>
+                    <Undo2 aria-hidden />
+                    Restore
+                  </DropdownMenuItem>
+                )}
+                {(inv.status === "DRAFT" || inv.status === "SENT" || inv.status === "OVERDUE") && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem variant="destructive" onClick={() => setVoiding(inv)}>
+                      <Ban aria-hidden />
+                      Void
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           );
         },
       },
@@ -575,6 +628,28 @@ export default function BillingPage() {
           </Button>
         </div>
       </div>
+
+      <Modal
+        open={!!voiding}
+        onClose={() => setVoiding(null)}
+        title="Void this invoice?"
+        description={
+          voiding
+            ? `${billToName(voiding)}, ${formatCurrency(voiding.totalCents)}, for ${formatDate(voiding.periodStart)} – ${formatDate(voiding.periodEnd)}. A void invoice can no longer be paid${voiding.status === "DRAFT" ? "" : " and disappears from the family's balance"}. You can restore it later if this is a mistake.`
+            : undefined
+        }
+        className="max-w-md"
+      >
+        <div className="flex justify-end gap-2 border-t pt-4">
+          <Button variant="outline" onClick={() => setVoiding(null)} disabled={isVoiding}>
+            Keep invoice
+          </Button>
+          <Button variant="destructive" onClick={confirmVoid} disabled={isVoiding}>
+            {isVoiding && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
+            Void invoice
+          </Button>
+        </div>
+      </Modal>
 
       <Modal
         open={!!sendPlan}
@@ -801,6 +876,12 @@ export default function BillingPage() {
                   <Button size="sm" onClick={() => updateStatus(detailInvoice.id, "SENT")}>
                     <Send className="h-4 w-4 mr-2" />
                     Send
+                  </Button>
+                )}
+                {detailInvoice.status === "VOID" && (
+                  <Button size="sm" variant="outline" onClick={() => restoreInvoice(detailInvoice)}>
+                    <Undo2 className="h-4 w-4 mr-2" aria-hidden />
+                    Restore invoice
                   </Button>
                 )}
                 {(detailInvoice.status === "SENT" || detailInvoice.status === "OVERDUE") && (

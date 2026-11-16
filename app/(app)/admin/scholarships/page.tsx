@@ -55,6 +55,15 @@ interface Student {
   lastName: string;
 }
 
+/** Amounts are stored in cents; the forms show and take dollars. */
+function centsToDollars(cents: number): string {
+  return (cents / 100).toFixed(2);
+}
+
+function dollarsToCents(dollars: string): number {
+  return Math.round(Number(dollars) * 100);
+}
+
 export default function ScholarshipsPage() {
   const [scholarships, setScholarships] = useState<ScholarshipRow[]>([]);
   const [totalPages, setTotalPages] = useState(1);
@@ -162,7 +171,7 @@ export default function ScholarshipsPage() {
     setEditingSch(s);
     setSchName(s.name);
     setSchType(s.type as "PERCENT" | "FIXED" | "WAIVER");
-    setSchValue(String(s.value));
+    setSchValue(s.type === "FIXED" ? centsToDollars(s.value) : String(s.value));
     setSchTarget(s.familyGroup ? "family" : "student");
     setSchTargetId(s.familyGroup?.id || s.student?.id || "");
     setSchStartDate(new Date(s.startDate).toISOString().split("T")[0]);
@@ -177,7 +186,7 @@ export default function ScholarshipsPage() {
       const body = {
         name: schName,
         type: schType,
-        value: Number(schValue),
+        value: schType === "FIXED" ? dollarsToCents(schValue) : Number(schValue),
         studentId: schTarget === "student" ? schTargetId : undefined,
         familyGroupId: schTarget === "family" ? schTargetId : undefined,
         startDate: schStartDate,
@@ -223,7 +232,7 @@ export default function ScholarshipsPage() {
     setRuleName(r.name);
     setRuleTrigger(String(r.triggerCount));
     setRuleDiscountType(r.discountType as "PERCENT_OFF" | "FIXED_PRICE" | "FAMILY_CAP");
-    setRuleValue(String(r.discountValue));
+    setRuleValue(r.discountType === "PERCENT_OFF" ? String(r.discountValue) : centsToDollars(r.discountValue));
     setRuleGlobal(r.isGlobal);
     setRuleFamilyId(r.familyGroup?.id || "");
     setRuleOpen(true);
@@ -236,7 +245,7 @@ export default function ScholarshipsPage() {
         name: ruleName,
         triggerCount: Number(ruleTrigger),
         discountType: ruleDiscountType,
-        discountValue: Number(ruleValue),
+        discountValue: ruleDiscountType === "PERCENT_OFF" ? Number(ruleValue) : dollarsToCents(ruleValue),
         isGlobal: ruleGlobal,
         familyGroupId: ruleGlobal ? undefined : ruleFamilyId || undefined,
       };
@@ -443,7 +452,7 @@ export default function ScholarshipsPage() {
             </div>
             <div className="grid gap-2">
               <Label>
-              {schType === "PERCENT" ? "Percentage" : schType === "FIXED" ? "Amount (cents)" : "Value"}
+              {schType === "PERCENT" ? "Percentage" : schType === "FIXED" ? "Amount ($)" : "Value"}
               <RequiredMark />
             </Label>
               <Input
@@ -451,7 +460,9 @@ export default function ScholarshipsPage() {
                 value={schValue}
                 onChange={(e) => setSchValue(e.target.value)}
                 disabled={schType === "WAIVER"}
-                placeholder={schType === "PERCENT" ? "e.g. 50" : "e.g. 5000"}
+                min="0"
+                step={schType === "FIXED" ? "0.01" : "1"}
+                placeholder={schType === "PERCENT" ? "e.g. 50" : "e.g. 50.00"}
               />
             </div>
           </div>
@@ -544,14 +555,16 @@ export default function ScholarshipsPage() {
             </div>
             <div className="grid gap-2">
               <Label>
-                {ruleDiscountType === "PERCENT_OFF" ? "Percentage" : "Amount (cents)"}
+                {ruleDiscountType === "PERCENT_OFF" ? "Percentage" : "Amount ($)"}
                 <RequiredMark />
               </Label>
               <Input
                 type="number"
                 value={ruleValue}
                 onChange={(e) => setRuleValue(e.target.value)}
-                placeholder={ruleDiscountType === "PERCENT_OFF" ? "e.g. 50" : "e.g. 5000"}
+                min="0"
+                step={ruleDiscountType === "PERCENT_OFF" ? "1" : "0.01"}
+                placeholder={ruleDiscountType === "PERCENT_OFF" ? "e.g. 50" : "e.g. 50.00"}
               />
             </div>
           </div>

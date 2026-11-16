@@ -347,6 +347,20 @@ Admin can bypass with an explicit `force: true` flag.
 - Only users with role ADMIN or SUPER_ADMIN can call the unlock endpoint.
 - Every lock/unlock action writes to AuditLog.
 
+### Student attendance and makeup classes
+- Attendance per student is shown on the admin student page (Attendance tab) and in the parent and student portals (`/parent/attendance`, `/student/attendance`), all through `AttendancePanel` and `lib/db/student-attendance.ts`. **Only submitted attendance (`lockedAt` set) is shown or counted**: before a teacher submits, every student is recorded ABSENT by default.
+- A submitted ABSENT or EXCUSED earns one makeup. A makeup is an `Enrollment` with `makeupForId` pointing at the missed `Attendance` row (unique, so one makeup per absence). Rules (`lib/makeups.ts`, `bookMakeup`, tested in `tests/makeups.test.ts`): any upcoming active class with a free spot, no time limit; staff (admins) can also count a class that already took place, when a student turned up unbooked (`allowPast`: no capacity check, the student is marked present there, and staff can undo it); never waitlisted, never forced past capacity; **never billed** (`lib/billing.ts` skips `makeupForId` enrollments); a missed makeup cannot be made up again; a makeup can be cancelled (`cancelMakeup`, which clears the link) until its class starts, and another booked.
+- Booking is open to admins and to the student own parent / the adult student: `/api/makeups*` use `requireStudentAccess` (`lib/api-auth.ts`). Teachers cannot book makeups.
+- Teachers see who is in each upcoming class on My Classes (names only, with Makeup and Waitlist tags) and take attendance on their Attendance page.
+
+### Studio closures
+- `StudioClosure` (name, `startDay`, `endDay` as "YYYY-MM-DD" studio calendar days, both included) marks days the studio is closed. Admins add and remove them on the Schedule page (`/api/closures`, `lib/db/closures.ts`; day arithmetic in `lib/closures.ts`).
+- Closed days are striped (`.closed-day`) on the admin calendar and the public schedule. **Classes on a closed day are not cancelled**, but `getPublicSchedule` / `getPublicSession` leave them out so they cannot be booked, and the teacher pay report does not count them.
+- The admin Schedule page is FullCalendar themed by `.studio-calendar` in `app/globals.css`; events are drawn by `renderEvent`.
+
+### Teacher pay report
+- Teachers are contractors paid outside the app. `/admin/teacher-pay` (admin, any teacher) and `/teacher/report` (own classes only, looked up from the session) list the classes taught between two studio days with totals (`getTeacherReport`, `lib/teacher-report.ts`). A class counts once it has started; closed days are excluded. The admin page can apply a per-class or per-hour rate to get a total, but **no pay rate is stored** and nothing is paid through the app.
+
 ### Invoice Status Flow
 ```
 DRAFT -> SENT -> PAID
@@ -354,6 +368,10 @@ DRAFT -> SENT -> PAID
 DRAFT -> VOID
 SENT  -> VOID
 ```
+
+- Voiding asks for confirmation. A VOID invoice can be restored (`restoreVoidedInvoice`, `POST /api/invoices/[id]/restore`): it comes back as DRAFT, or SENT if a payment was ever recorded, and is refused when the same account has another non-VOID invoice overlapping the period (it would bill twice).
+- **Duplicate** (`duplicateInvoice`, `POST /api/invoices/[id]/duplicate`) copies any invoice into a new DRAFT with every line marked `custom`; it does not copy `RegistrationCharge` links.
+- Row actions on the Billing table live in a three-dot menu (`DropdownMenu`).
 
 ### Stripe Webhook Events to Handle
 - `payment_intent.succeeded` → mark Payment PAID, mark Invoice PAID, send receipt email
