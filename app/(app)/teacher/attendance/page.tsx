@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -40,6 +41,8 @@ interface AttendanceRecord {
   lockedAt: string | null;
   notes: string | null;
   enrollment: {
+    /** Set when the student is in this class as a makeup for one they missed */
+    makeupForId: string | null;
     student: {
       id: string;
       firstName: string;
@@ -333,6 +336,11 @@ export default function TeacherAttendancePage() {
                           <p className="font-medium text-sm">
                             {record.enrollment.student.firstName}{" "}
                             {record.enrollment.student.lastName}
+                            {record.enrollment.makeupForId && (
+                              <Badge variant="secondary" className="ml-2">
+                                Makeup
+                              </Badge>
+                            )}
                           </p>
                           {record.enrollment.student.email && (
                             <p className="text-xs text-muted-foreground">

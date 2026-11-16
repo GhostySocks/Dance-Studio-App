@@ -26,6 +26,8 @@ import {
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import { Modal } from "@/components/modal";
 import { AdminEnrollForm } from "@/components/forms/admin-enroll-form";
+import { AttendancePanel } from "@/components/attendance/attendance-panel";
+import type { StudentAttendance } from "@/lib/db/student-attendance";
 import { PLAN_LABELS, PLAN_UNITS, type BillingPlan } from "@/lib/registration-billing";
 
 interface Enrollment {
@@ -123,6 +125,22 @@ export default function StudentDetailPage() {
   const [enrollOpen, setEnrollOpen] = useState(false);
   const [cancellingRegistration, setCancellingRegistration] = useState<Registration | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
+
+  const [attendance, setAttendance] = useState<StudentAttendance | null>(null);
+
+  const fetchAttendance = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/students/${params.id}/attendance`);
+      if (!res.ok) throw new Error("Failed");
+      setAttendance((await res.json()).data);
+    } catch {
+      toast.error("Failed to load attendance");
+    }
+  }, [params.id]);
+
+  useEffect(() => {
+    fetchAttendance();
+  }, [fetchAttendance]);
 
   const fetchStudent = useCallback(async () => {
     try {
@@ -293,6 +311,15 @@ export default function StudentDetailPage() {
         <Tabs defaultValue="enrollments" className="flex flex-col">
           <TabsList className="bg-white rounded-full shadow-sm p-1 h-auto gap-1 self-start">
             <TabsTrigger value="enrollments" className="rounded-full px-4 py-2 text-sm data-[active]:bg-primary data-[active]:text-primary-foreground">Enrollments</TabsTrigger>
+            <TabsTrigger value="attendance" className="rounded-full px-4 py-2 text-sm data-[active]:bg-primary data-[active]:text-primary-foreground">
+              Attendance
+              {attendance && attendance.summary.makeupsAvailable > 0 && (
+                <span className="ml-1.5 rounded-full bg-cta px-1.5 text-xs font-semibold text-cta-foreground">
+                  {attendance.summary.makeupsAvailable}
+                  <span className="sr-only"> makeups available</span>
+                </span>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="history" className="rounded-full px-4 py-2 text-sm data-[active]:bg-primary data-[active]:text-primary-foreground">History</TabsTrigger>
           </TabsList>
 
@@ -460,6 +487,28 @@ export default function StudentDetailPage() {
                     </Table>
                   </div>
                 </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="attendance" className="mt-4">
+          <Card className="rounded-2xl border-0 shadow-md">
+            <CardHeader>
+              <CardTitle>Attendance</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {attendance ? (
+                <AttendancePanel
+                  staff
+                  attendance={attendance}
+                  onChanged={() => {
+                    fetchAttendance();
+                    fetchStudent();
+                  }}
+                />
+              ) : (
+                <p className="py-4 text-center text-sm text-muted-foreground">Loading...</p>
               )}
             </CardContent>
           </Card>

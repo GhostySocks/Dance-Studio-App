@@ -14,6 +14,8 @@ import {
 
 interface ScheduleEntry {
   id: string;
+  /** Set when this booking is a makeup for a missed class */
+  makeupForId: string | null;
   student: { firstName: string; lastName: string };
   session: {
     startTime: string;
@@ -91,7 +93,10 @@ export function ScheduleView({ description }: { description: string }) {
                       <CardContent className="py-4">
                         <div className="flex items-start justify-between">
                           <div className="space-y-1">
-                            <p className="font-medium">{entry.session.template.name}</p>
+                            <p className="flex flex-wrap items-center gap-2 font-medium">
+                              {entry.session.template.name}
+                              {entry.makeupForId && <Badge variant="outline">Makeup class</Badge>}
+                            </p>
                             <p className="text-xs text-muted-foreground">
                               for {entry.student.firstName} {entry.student.lastName}
                             </p>

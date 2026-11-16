@@ -140,6 +140,20 @@ model User {
   updatedAt     DateTime   @updatedAt
 }
 
+/// Days the studio is closed (a holiday, a break). Whole studio calendar days,
+/// stored as "YYYY-MM-DD" so they mean the same day in every timezone.
+model StudioClosure {
+  id        String   @id @default(cuid())
+  name      String
+  startDay  String
+  /// Last closed day, inclusive
+  endDay    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([startDay, endDay])
+}
+
 model StudioProfile {
   id              String   @id @default(cuid())
   name            String
@@ -372,6 +386,10 @@ model Enrollment {
   /// Set when this date was booked as part of a term registration (billed by plan, not per class)
   registration   Registration?    @relation(fields: [registrationId], references: [id], onDelete: SetNull)
   registrationId String?
+  /// Set when this booking is a makeup for a missed class: the attendance record
+  /// (absent or excused) it makes up for. Makeups are never billed.
+  makeupFor      Attendance?      @relation("Makeup", fields: [makeupForId], references: [id], onDelete: SetNull)
+  makeupForId    String?          @unique
   attendance     Attendance[]
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
@@ -388,6 +406,8 @@ model Attendance {
   status       AttendanceStatus
   lockedAt     DateTime?
   notes        String?
+  /// The makeup class booked for this absence, if any
+  makeup       Enrollment?      @relation("Makeup")
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 

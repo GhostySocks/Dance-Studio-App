@@ -14,6 +14,7 @@ import {
   Receipt,
   Award,
   BarChart3,
+  Wallet,
   ClipboardCheck,
   PanelLeftClose,
   PanelLeft,
@@ -46,6 +47,7 @@ const adminNav: NavItem[] = [
   { title: "Billing", href: "/admin/billing", icon: Receipt },
   { title: "Scholarships", href: "/admin/scholarships", icon: Award },
   { title: "Reports", href: "/admin/reports", icon: BarChart3 },
+  { title: "Teacher Pay", href: "/admin/teacher-pay", icon: Wallet },
   { title: "Settings", href: "/admin/settings", icon: Settings },
 ];
 
@@ -53,18 +55,21 @@ const teacherNav: NavItem[] = [
   { title: "Dashboard", href: "/teacher/dashboard", icon: LayoutDashboard },
   { title: "My Classes", href: "/teacher/classes", icon: BookOpen },
   { title: "Attendance", href: "/teacher/attendance", icon: ClipboardCheck },
+  { title: "My Report", href: "/teacher/report", icon: BarChart3 },
 ];
 
 const parentNav: NavItem[] = [
   { title: "Dashboard", href: "/parent/dashboard", icon: LayoutDashboard },
   { title: "My Students", href: "/parent/students", icon: Users },
   { title: "Schedule", href: "/parent/schedule", icon: Calendar },
+  { title: "Attendance", href: "/parent/attendance", icon: ClipboardCheck },
   { title: "Billing", href: "/parent/billing", icon: Receipt },
 ];
 
 const studentNav: NavItem[] = [
   { title: "Dashboard", href: "/student/dashboard", icon: LayoutDashboard },
   { title: "Schedule", href: "/student/schedule", icon: Calendar },
+  { title: "Attendance", href: "/student/attendance", icon: ClipboardCheck },
   { title: "Billing", href: "/student/billing", icon: Receipt },
 ];
 

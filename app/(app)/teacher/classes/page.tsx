@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clock, MapPin, Users } from "lucide-react";
+import { ChevronDown, Clock, MapPin, Users } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +14,13 @@ interface Session {
   maxCapacity: number;
   template: { name: string; danceStyle: string };
   room: { name: string };
-  enrollments: { id: string }[];
+  enrollments: {
+    id: string;
+    status: "ACTIVE" | "WAITLIST";
+    /** Set when the student is in this class as a makeup for one they missed */
+    makeupForId: string | null;
+    student: { firstName: string; lastName: string };
+  }[];
 }
 
 interface TeacherData {
@@ -76,7 +82,7 @@ export default function TeacherClassesPage() {
     <div className="space-y-6">
       <PageHeader
         title="My Classes"
-        description="Your upcoming scheduled classes"
+        description="Your upcoming classes and who is in each one"
       />
 
       {sessions.length === 0 ? (
@@ -89,7 +95,10 @@ export default function TeacherClassesPage() {
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {sessions.map((session) => (
+          {sessions.map((session) => {
+            const enrolled = session.enrollments.filter((e) => e.status === "ACTIVE");
+            const waitlisted = session.enrollments.filter((e) => e.status === "WAITLIST");
+            return (
             <Card key={session.id}>
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -112,14 +121,45 @@ export default function TeacherClassesPage() {
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Users className="h-4 w-4 shrink-0" />
                     <span>
-                      {session.enrollments.length} / {session.maxCapacity}{" "}
-                      students enrolled
+                      {enrolled.length} / {session.maxCapacity} students enrolled
+                      {waitlisted.length > 0 ? `, ${waitlisted.length} waitlisted` : ""}
                     </span>
                   </div>
                 </div>
+
+                {session.enrollments.length === 0 ? (
+                  <p className="mt-4 border-t pt-3 text-sm text-muted-foreground">
+                    No students enrolled yet.
+                  </p>
+                ) : (
+                  <details className="group mt-4 border-t pt-3">
+                    <summary className="flex cursor-pointer list-none items-center justify-between rounded-md text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                      <span>
+                        <span className="group-open:hidden">Show students</span>
+                        <span className="hidden group-open:inline">Hide students</span>
+                      </span>
+                      <ChevronDown
+                        className="h-4 w-4 transition-transform group-open:rotate-180"
+                        aria-hidden
+                      />
+                    </summary>
+                    <ul className="mt-2 space-y-1.5 text-sm">
+                      {[...enrolled, ...waitlisted].map((enrollment) => (
+                        <li key={enrollment.id} className="flex flex-wrap items-center gap-2">
+                          <span>
+                            {enrollment.student.firstName} {enrollment.student.lastName}
+                          </span>
+                          {enrollment.makeupForId && <Badge variant="secondary">Makeup</Badge>}
+                          {enrollment.status === "WAITLIST" && <Badge variant="outline">Waitlist</Badge>}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

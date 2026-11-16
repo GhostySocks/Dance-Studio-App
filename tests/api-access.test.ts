@@ -33,6 +33,7 @@ const CHECKS = [
   /session\.user\.id/, // data looked up for the signed-in user
   /canUserAccessInvoice\(/,
   /loadOwnedAccount\(/,
+  /requireStudentAccess\(/, // an admin, or the student's own parent / the adult student
 ];
 
 function routeFiles(dir: string): string[] {
@@ -82,6 +83,7 @@ describe("API access", () => {
       "families GET",
       "families/[id] GET",
       "teachers GET",
+      "students/[id]/attendance GET",
     ];
     const adminCheck = [CHECKS[0], CHECKS[1], CHECKS[2]];
     for (const name of adminOnly) {

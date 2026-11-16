@@ -52,6 +52,8 @@ async function classUnits(
     where: {
       status: "ACTIVE",
       registrationId: null,
+      // A makeup replaces a class that was already paid for
+      makeupForId: null,
       ...(studentWhere.id ? { studentId: studentWhere.id } : { student: studentWhere }),
       session: {
         startTime: { gte: periodStart },
