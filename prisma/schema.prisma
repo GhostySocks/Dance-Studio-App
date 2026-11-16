@@ -245,6 +245,9 @@ model Teacher {
   /// Class dates this teacher normally takes that a substitute taught instead
   coveredSessions ClassSession[] @relation("SubstituteFor")
   payments    TeacherPayment[]
+  /// Set when someone who keeps their account (an administrator who also taught)
+  /// stops being a teacher. A teacher-only account is removed by disabling the user.
+  removedAt   DateTime?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 }

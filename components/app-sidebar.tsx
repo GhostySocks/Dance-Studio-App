@@ -50,9 +50,9 @@ const adminNav: NavGroup[] = [
     items: [
       { title: "Schedule", href: "/admin/schedule", icon: Calendar },
       { title: "Classes", href: "/admin/classes", icon: BookOpen },
-      { title: "Term Enrollments", href: "/admin/registrations", icon: ClipboardList },
       { title: "Class Enrollments", href: "/admin/enrollments", icon: UserCheck },
       { title: "Terms", href: "/admin/terms", icon: CalendarRange },
+      { title: "Term Enrollments", href: "/admin/registrations", icon: ClipboardList },
       { title: "Rooms", href: "/admin/rooms", icon: DoorOpen },
     ],
   },
@@ -73,6 +73,16 @@ const adminNav: NavGroup[] = [
   },
   { label: "Studio", items: [{ title: "Settings", href: "/admin/settings", icon: Settings }] },
 ];
+
+/** Shown to an administrator who also has a teacher profile */
+const myTeachingNav: NavGroup = {
+  label: "My teaching",
+  items: [
+    { title: "My Classes", href: "/teacher/classes", icon: BookOpen },
+    { title: "Take Attendance", href: "/teacher/attendance", icon: ClipboardCheck },
+    { title: "My Report", href: "/teacher/report", icon: BarChart3 },
+  ],
+};
 
 const teacherNav: NavItem[] = [
   { title: "Dashboard", href: "/teacher/dashboard", icon: LayoutDashboard },
@@ -96,11 +106,15 @@ const studentNav: NavItem[] = [
   { title: "Billing", href: "/student/billing", icon: Receipt },
 ];
 
-function getNavForRole(role: string): { label: string; groups: NavGroup[] } {
+function getNavForRole(role: string, teaches: boolean): { label: string; groups: NavGroup[] } {
   switch (role) {
     case "SUPER_ADMIN":
     case "ADMIN":
-      return { label: "Administration", groups: adminNav };
+      // Dashboard first, then their own teaching, then the rest of the studio
+      return {
+        label: "Administration",
+        groups: teaches ? [adminNav[0], myTeachingNav, ...adminNav.slice(1)] : adminNav,
+      };
     case "TEACHER":
       return { label: "Teacher Portal", groups: [{ items: teacherNav }] };
     case "PARENT":
@@ -114,15 +128,18 @@ function getNavForRole(role: string): { label: string; groups: NavGroup[] } {
 
 export function AppSidebar({
   role,
+  teaches = false,
   collapsed,
   onToggle,
 }: {
   role: string;
+  /** The account has a teacher profile (only changes an administrator's menu) */
+  teaches?: boolean;
   collapsed: boolean;
   onToggle: () => void;
 }) {
   const pathname = usePathname();
-  const nav = getNavForRole(role);
+  const nav = getNavForRole(role, teaches);
 
   return (
     <aside

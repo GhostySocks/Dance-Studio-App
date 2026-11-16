@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireAdmin } from "@/lib/api-auth";
-import { createAdminAccount, findAccountByEmail, getAdmins, reactivateAdmin } from "@/lib/db/staff";
+import { createAdminAccount, findAccountByEmail, getAdmins, reactivateAdmin, promoteTeacherToAdmin } from "@/lib/db/staff";
 import { EMAIL_IN_USE, inviteStaff, isDuplicateEmail } from "@/lib/staff-api";
 import { newAdminSchema } from "@/lib/validations/staff";
 
@@ -33,6 +33,16 @@ export async function POST(req: NextRequest) {
     }
     const existing = await findAccountByEmail(parsed.data.email);
     if (existing) {
+      // A current teacher becomes an administrator as well, keeping their sign-in and classes
+      if (existing.role === "TEACHER" && !existing.disabledAt) {
+        const promoted = await promoteTeacherToAdmin(existing.id, session.user.id);
+        return NextResponse.json(
+          {
+            data: { id: promoted.user.id, existingTeacher: true, name: promoted.user.name, emailed: false, inviteUrl: null },
+          },
+          { status: 201 }
+        );
+      }
       // An administrator who was removed earlier is brought back
       if (!(existing.disabledAt && existing.role === "ADMIN")) {
         return NextResponse.json({ error: EMAIL_IN_USE }, { status: 409 });

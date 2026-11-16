@@ -21,7 +21,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { userId: 
       case "owner":
         return NextResponse.json({ error: "The studio owner cannot be removed." }, { status: 400 });
       default:
-        return NextResponse.json({ data: { removed: true } });
+        return NextResponse.json({ data: { removed: true, stillTeacher: result === "now-teacher" } });
     }
   } catch (error) {
     console.error("DELETE /api/admins/[userId] error:", error);

@@ -15,7 +15,7 @@ export async function getTeacherMessageContext(userId: string, teacherId: string
   const [sender, teacher, enrollments] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } }),
     prisma.teacher.findFirst({
-      where: { id: teacherId, user: { disabledAt: null } },
+      where: { id: teacherId, removedAt: null, user: { disabledAt: null } },
       select: { user: { select: { name: true, email: true } } },
     }),
     prisma.enrollment.findMany({

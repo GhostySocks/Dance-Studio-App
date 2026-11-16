@@ -4,7 +4,7 @@ import type { Adapter } from "next-auth/adapters";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { getActiveRole } from "@/lib/account-status";
+import { getAccountStatus } from "@/lib/account-status";
 import type { UserRole } from "@prisma/client";
 
 /** Thrown from the jwt callback to end the session of a removed account. */
@@ -64,22 +64,25 @@ export const authOptions: NextAuthOptions = {
         // Signing in: authorize() has just checked the account
         token.id = user.id;
         token.role = (user as { role: UserRole }).role;
+        token.teaches = (await getAccountStatus(user.id))?.teaches ?? false;
         return token;
       }
 
       // Every later request: is the account still there, and what is its role now?
-      const role = await getActiveRole(token.id as string);
-      if (!role) {
+      const status = await getAccountStatus(token.id as string);
+      if (!status) {
         // NextAuth treats a failing jwt callback as "no session" and clears the cookie
         throw new Error(ACCOUNT_REVOKED);
       }
-      token.role = role;
+      token.role = status.role;
+      token.teaches = status.teaches;
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as UserRole;
+        session.user.teaches = token.teaches === true;
       }
       return session;
     },

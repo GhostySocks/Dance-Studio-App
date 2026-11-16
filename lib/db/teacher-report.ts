@@ -24,7 +24,7 @@ export interface TeacherReport {
 
 /** The teacher profile belonging to a signed-in teacher, if any. */
 export async function getTeacherIdForUser(userId: string): Promise<string | null> {
-  const teacher = await prisma.teacher.findUnique({ where: { userId }, select: { id: true } });
+  const teacher = await prisma.teacher.findFirst({ where: { userId, removedAt: null }, select: { id: true } });
   return teacher?.id ?? null;
 }
 

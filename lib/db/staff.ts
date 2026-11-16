@@ -11,6 +11,13 @@ import { prisma } from "@/lib/prisma";
  * Removing a staff member disables the account (User.disabledAt) rather than
  * deleting it, so the classes they taught and the audit trail keep their name.
  * A disabled account cannot sign in and is signed out on its next request.
+ *
+ * One account can be both an administrator and a teacher (an owner who teaches):
+ * the role stays ADMIN and the account also has a teacher profile. Taking away
+ * one of the two never takes away the other:
+ *  - removing them as a teacher marks the profile removed (Teacher.removedAt) and
+ *    leaves the account alone;
+ *  - removing them as an administrator turns the account into a TEACHER account.
  */
 
 interface TeacherProfile {
@@ -23,7 +30,14 @@ interface TeacherProfile {
 export async function findAccountByEmail(email: string) {
   return prisma.user.findUnique({
     where: { email },
-    select: { id: true, role: true, disabledAt: true, teacher: { select: { id: true } } },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      disabledAt: true,
+      teacher: { select: { id: true, removedAt: true } },
+    },
   });
 }
 
@@ -78,6 +92,45 @@ export async function reactivateTeacher(
   return result;
 }
 
+/**
+ * Makes an existing administrator a teacher as well: they keep their sign-in and
+ * gain a teacher profile (or get back the one they had).
+ */
+export async function addTeacherProfile(userId: string, data: TeacherProfile, actorId: string) {
+  const profile = { phone: data.phone || null, specialties: data.specialties, bio: data.bio || null };
+  const teacher = await prisma.$transaction(async (tx) => {
+    const saved = await tx.teacher.upsert({
+      where: { userId },
+      create: { userId, ...profile },
+      update: { ...profile, removedAt: null },
+      select: { id: true },
+    });
+    await tx.auditLog.create({
+      data: { actorId, action: "TEACHER_PROFILE_ADDED", entityType: "Teacher", entityId: saved.id, meta: { userId } },
+    });
+    return saved;
+  });
+  clearAccountStatus(userId);
+  return { teacherId: teacher.id };
+}
+
+/** Makes an existing teacher an administrator as well; they stay a teacher. */
+export async function promoteTeacherToAdmin(userId: string, actorId: string) {
+  const user = await prisma.$transaction(async (tx) => {
+    const updated = await tx.user.update({
+      where: { id: userId },
+      data: { role: "ADMIN" },
+      select: { id: true, email: true, name: true },
+    });
+    await tx.auditLog.create({
+      data: { actorId, action: "ADMIN_CREATED", entityType: "User", entityId: userId, meta: { fromTeacher: true } },
+    });
+    return updated;
+  });
+  clearAccountStatus(userId);
+  return { user };
+}
+
 export async function createAdminAccount(data: { name: string; email: string }, actorId: string) {
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
@@ -109,11 +162,23 @@ export async function reactivateAdmin(userId: string, data: { name: string }, ac
 export async function getAdmins() {
   const admins = await prisma.user.findMany({
     where: { role: { in: ["ADMIN", "SUPER_ADMIN"] }, disabledAt: null },
-    select: { id: true, name: true, email: true, role: true, passwordHash: true, createdAt: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      passwordHash: true,
+      createdAt: true,
+      teacher: { select: { removedAt: true } },
+    },
     orderBy: { createdAt: "asc" },
   });
   // Never send the hash anywhere; only whether one exists
-  return admins.map(({ passwordHash, ...admin }) => ({ ...admin, hasPassword: !!passwordHash }));
+  return admins.map(({ passwordHash, teacher, ...admin }) => ({
+    ...admin,
+    hasPassword: !!passwordHash,
+    teaches: teacher !== null && teacher.removedAt === null,
+  }));
 }
 
 /** A current teacher or administrator by user id, for sending them a sign-in link. */
@@ -142,13 +207,15 @@ export async function countUpcomingSessions(teacherId: string) {
 }
 
 export type RemoveTeacherResult =
-  | { status: "removed"; reassigned: number }
+  /** `keptAccount`: they are also an administrator, so only the teacher profile was removed */
+  | { status: "removed"; reassigned: number; keptAccount: boolean }
   | { status: "not-found" | "needs-reassign" | "bad-reassign" };
 
 /**
  * Removes a teacher. Their past classes and attendance stay on record under their
  * name. Classes they were still due to teach must be handed to another teacher,
- * because a class cannot be left without one.
+ * because a class cannot be left without one. A teacher-only account is disabled;
+ * an administrator who also teaches keeps their account and administrator access.
  */
 export async function removeTeacher(
   teacherId: string,
@@ -156,17 +223,18 @@ export async function removeTeacher(
   actorId: string
 ): Promise<RemoveTeacherResult> {
   const teacher = await prisma.teacher.findFirst({
-    where: { id: teacherId, user: { disabledAt: null } },
-    select: { id: true, user: { select: { id: true, email: true } } },
+    where: { id: teacherId, removedAt: null, user: { disabledAt: null } },
+    select: { id: true, user: { select: { id: true, email: true, role: true } } },
   });
   if (!teacher) return { status: "not-found" };
+  const keptAccount = teacher.user.role === "ADMIN" || teacher.user.role === "SUPER_ADMIN";
 
   const now = new Date();
   const upcoming = await prisma.classSession.count({ where: { teacherId, startTime: { gt: now } } });
   if (upcoming > 0) {
     if (!reassignToTeacherId) return { status: "needs-reassign" };
     const target = await prisma.teacher.findFirst({
-      where: { id: reassignToTeacherId, user: { disabledAt: null } },
+      where: { id: reassignToTeacherId, removedAt: null, user: { disabledAt: null } },
       select: { id: true },
     });
     if (!target || target.id === teacherId) return { status: "bad-reassign" };
@@ -182,46 +250,57 @@ export async function removeTeacher(
             })
           ).count
         : 0;
-    await disableUser(tx, teacher.user);
+    if (keptAccount) {
+      await tx.teacher.update({ where: { id: teacherId }, data: { removedAt: now }, select: { id: true } });
+    } else {
+      await disableUser(tx, teacher.user);
+    }
     await tx.auditLog.create({
       data: {
         actorId,
         action: "TEACHER_REMOVED",
         entityType: "Teacher",
         entityId: teacherId,
-        meta: { reassigned: moved, reassignedTo: moved > 0 ? reassignToTeacherId : null },
+        meta: { reassigned: moved, reassignedTo: moved > 0 ? reassignToTeacherId : null, keptAccount },
       },
     });
     return moved;
   });
 
   clearAccountStatus(teacher.user.id);
-  return { status: "removed", reassigned };
+  return { status: "removed", reassigned, keptAccount };
 }
 
-export type RemoveAdminResult = "removed" | "not-found" | "self" | "owner";
+/** "now-teacher": they also teach, so they keep their account as a teacher */
+export type RemoveAdminResult = "removed" | "now-teacher" | "not-found" | "self" | "owner";
 
 /**
  * Removes an administrator's access. You cannot remove yourself (so there is
  * always at least one administrator), and the studio owner cannot be removed here.
+ * An administrator who also teaches stays on as a teacher instead of being disabled.
  */
 export async function removeAdmin(userId: string, actorId: string): Promise<RemoveAdminResult> {
   if (userId === actorId) return "self";
 
   const user = await prisma.user.findFirst({
     where: { id: userId, role: { in: ["ADMIN", "SUPER_ADMIN"] }, disabledAt: null },
-    select: { id: true, email: true, role: true },
+    select: { id: true, email: true, role: true, teacher: { select: { removedAt: true } } },
   });
   if (!user) return "not-found";
   if (user.role === "SUPER_ADMIN") return "owner";
+  const teaches = user.teacher !== null && user.teacher.removedAt === null;
 
   await prisma.$transaction(async (tx) => {
-    await disableUser(tx, user);
+    if (teaches) {
+      await tx.user.update({ where: { id: userId }, data: { role: "TEACHER" }, select: { id: true } });
+    } else {
+      await disableUser(tx, user);
+    }
     await tx.auditLog.create({
-      data: { actorId, action: "ADMIN_REMOVED", entityType: "User", entityId: userId },
+      data: { actorId, action: "ADMIN_REMOVED", entityType: "User", entityId: userId, meta: { keptAsTeacher: teaches } },
     });
   });
 
   clearAccountStatus(userId);
-  return "removed";
+  return teaches ? "now-teacher" : "removed";
 }

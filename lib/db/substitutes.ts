@@ -29,11 +29,11 @@ export async function assignSubstitute({
       }),
       tx.teacher.findUnique({
         where: { id: substituteTeacherId },
-        select: { id: true, user: { select: { name: true, disabledAt: true } } },
+        select: { id: true, removedAt: true, user: { select: { name: true, disabledAt: true } } },
       }),
     ]);
     if (!session) throw new SubstituteError("Class not found");
-    if (!substitute || substitute.user.disabledAt) {
+    if (!substitute || substitute.user.disabledAt || substitute.removedAt) {
       throw new SubstituteError("That teacher is no longer available");
     }
 

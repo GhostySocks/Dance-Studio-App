@@ -1,6 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 
+/**
+ * A current teacher: the account is not disabled and the teacher profile has not
+ * been removed (an administrator who stops teaching keeps their account).
+ */
+export const CURRENT_TEACHER = {
+  removedAt: null,
+  user: { disabledAt: null },
+} satisfies Prisma.TeacherWhereInput;
+
 export async function getTeachers({
   search,
   page = 1,
@@ -12,6 +21,7 @@ export async function getTeachers({
 }) {
   // Removed teachers keep their history but are no longer listed
   const where: Prisma.TeacherWhereInput = {
+    removedAt: null,
     user: {
       disabledAt: null,
       ...(search
@@ -29,7 +39,7 @@ export async function getTeachers({
     prisma.teacher.findMany({
       where,
       include: {
-        user: { select: { id: true, name: true, email: true, image: true } },
+        user: { select: { id: true, name: true, email: true, image: true, role: true } },
         sessions: {
           where: {
             startTime: { gte: new Date() },
@@ -49,9 +59,9 @@ export async function getTeachers({
 
 export async function getTeacherById(id: string) {
   return prisma.teacher.findFirst({
-    where: { id, user: { disabledAt: null } },
+    where: { id, ...CURRENT_TEACHER },
     include: {
-      user: { select: { id: true, name: true, email: true, image: true } },
+      user: { select: { id: true, name: true, email: true, image: true, role: true } },
       sessions: {
         include: {
           template: { select: { name: true, danceStyle: true } },
@@ -82,8 +92,8 @@ export async function updateTeacher(
  * on a makeup; cancelled bookings are left out.
  */
 export async function getTeacherUpcomingClasses(userId: string) {
-  return prisma.teacher.findUnique({
-    where: { userId },
+  return prisma.teacher.findFirst({
+    where: { userId, ...CURRENT_TEACHER },
     select: {
       id: true,
       user: { select: { id: true, name: true, email: true, image: true } },
@@ -115,10 +125,10 @@ export async function getTeacherUpcomingClasses(userId: string) {
   });
 }
 
-/** Current teachers by name, for pick-lists. Removed (disabled) teachers are left out. */
+/** Current teachers by name, for pick-lists. Removed teachers are left out. */
 export async function getTeacherOptions(): Promise<{ id: string; name: string }[]> {
   const teachers = await prisma.teacher.findMany({
-    where: { user: { disabledAt: null } },
+    where: CURRENT_TEACHER,
     select: { id: true, user: { select: { name: true } } },
     orderBy: { user: { name: "asc" } },
   });

@@ -25,6 +25,7 @@ interface Teacher {
     name: string | null;
     email: string;
     image: string | null;
+    role: string;
   };
   sessions: { id: string }[];
 }
@@ -37,6 +38,16 @@ const columns: ColumnDef<Teacher, unknown>[] = [
       <Link href={`/admin/teachers/${row.original.id}`} className="font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline">
         {row.original.user.name ?? row.original.user.email}
       </Link>
+    ),
+  },
+  {
+    id: "access",
+    header: "Access",
+    cell: ({ row }) =>
+      row.original.user.role === "TEACHER" ? (
+        <span className="text-muted-foreground">Teacher</span>
+      ) : (
+        <Badge variant="outline">Teacher + Administrator</Badge>
     ),
   },
   {
@@ -131,6 +142,11 @@ export default function AdminTeachersPage() {
       >
         <NewTeacherForm
           onCancel={() => setAdding(false)}
+          onLinked={(name) => {
+            setAdding(false);
+            toast.success(`${name} is now a teacher as well. They sign in the same way as before.`);
+            fetchTeachers();
+          }}
           onCreated={(result) => {
             setAdding(false);
             announceInvite(result, true);

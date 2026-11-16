@@ -96,7 +96,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
           { status: 400 }
         );
       default:
-        return NextResponse.json({ data: { removed: true, reassigned: result.reassigned } });
+        return NextResponse.json({ data: { removed: true, reassigned: result.reassigned, keptAccount: result.keptAccount } });
     }
   } catch (error) {
     console.error("DELETE /api/teachers/[id] error:", error);

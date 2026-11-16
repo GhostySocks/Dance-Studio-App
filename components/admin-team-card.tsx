@@ -24,6 +24,8 @@ interface Admin {
   email: string;
   role: "ADMIN" | "SUPER_ADMIN";
   hasPassword: boolean;
+  /** Also has a teacher profile */
+  teaches: boolean;
 }
 
 async function readError(res: Response, fallback: string) {
@@ -33,9 +35,12 @@ async function readError(res: Response, fallback: string) {
 
 function NewAdminForm({
   onCreated,
+  onPromoted,
   onCancel,
 }: {
   onCreated: (result: InviteResult) => void;
+  /** An existing teacher was made an administrator too: no invitation is involved */
+  onPromoted: (name: string) => void;
   onCancel: () => void;
 }) {
   const { register, handleSubmit, formState } = useForm<NewAdminFormData>({
@@ -56,6 +61,10 @@ function NewAdminForm({
         return;
       }
       const { data } = await res.json();
+      if (data.existingTeacher) {
+        onPromoted(data.name ?? values.name);
+        return;
+      }
       onCreated({ name: values.name, emailed: data.emailed, inviteUrl: data.inviteUrl });
     } catch {
       toast.error("Could not add administrator. Please try again.");
@@ -98,7 +107,8 @@ function NewAdminForm({
       </div>
       <p className="text-sm text-muted-foreground">
         Administrators can see and change everything, including billing and other
-        administrators.
+        administrators. Enter a current teacher&apos;s email to make them an administrator as
+        well; they keep their classes and their sign-in.
       </p>
       <div className="flex justify-end gap-2 border-t pt-4">
         <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
@@ -121,6 +131,7 @@ export function AdminTeamCard() {
   const [sendingTo, setSendingTo] = useState<string | null>(null);
   const [removing, setRemoving] = useState<Admin | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [addingTeacher, setAddingTeacher] = useState<string | null>(null);
   const { data: session } = useSession();
   const myId = session?.user?.id;
 
@@ -132,7 +143,12 @@ export function AdminTeamCard() {
       if (!res.ok) {
         toast.error(await readError(res, "Could not remove administrator"));
       } else {
-        toast.success(`${removing.name} is no longer an administrator.`);
+        const { data } = await res.json();
+        toast.success(
+          data?.stillTeacher
+            ? `${removing.name} is no longer an administrator, and is still a teacher.`
+            : `${removing.name} is no longer an administrator.`
+        );
         load();
       }
       setRemoving(null);
@@ -157,6 +173,28 @@ export function AdminTeamCard() {
   useEffect(() => {
     load();
   }, [load]);
+
+  /** Gives an administrator a teacher profile, so they can be assigned to classes. */
+  async function addAsTeacher(admin: Admin) {
+    setAddingTeacher(admin.id);
+    try {
+      const res = await fetch("/api/teachers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: admin.name, email: admin.email, phone: "", specialties: "", bio: "" }),
+      });
+      if (!res.ok) {
+        toast.error(await readError(res, "Could not add them as a teacher"));
+        return;
+      }
+      toast.success(`${admin.name} is now a teacher as well. Add their bio and specialties on the Teachers page.`);
+      load();
+    } catch {
+      toast.error("Could not add them as a teacher. Please try again.");
+    } finally {
+      setAddingTeacher(null);
+    }
+  }
 
   async function sendLink(admin: Admin) {
     setSendingTo(admin.id);
@@ -197,6 +235,7 @@ export function AdminTeamCard() {
                   <p className="flex items-center gap-2 text-sm font-semibold">
                     {admin.name}
                     {admin.role === "SUPER_ADMIN" && <Badge variant="secondary">Owner</Badge>}
+                    {admin.teaches && <Badge variant="outline">Also teaches</Badge>}
                     {!admin.hasPassword && <Badge variant="outline">Invited</Badge>}
                   </p>
                   <p className="text-xs text-muted-foreground">{admin.email}</p>
@@ -211,6 +250,17 @@ export function AdminTeamCard() {
                     >
                       {sendingTo === admin.id ? "Sending…" : "Resend invitation"}
                       <span className="sr-only"> to {admin.name}</span>
+                    </Button>
+                  )}
+                  {!admin.teaches && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={addingTeacher === admin.id}
+                      onClick={() => addAsTeacher(admin)}
+                    >
+                      {addingTeacher === admin.id ? "Adding…" : "Add as teacher"}
+                      <span className="sr-only">: {admin.name}</span>
                     </Button>
                   )}
                   {admin.id === myId ? (
@@ -229,7 +279,9 @@ export function AdminTeamCard() {
           </ul>
         )}
         <p className="mt-3 text-sm text-muted-foreground">
-          Teachers are added on the Teachers page.
+          Teachers are added on the Teachers page. An administrator who also teaches classes can
+          be added as a teacher here: they keep one sign-in and get a My teaching section in
+          their menu.
         </p>
       </CardContent>
 
@@ -242,6 +294,11 @@ export function AdminTeamCard() {
       >
         <NewAdminForm
           onCancel={() => setAdding(false)}
+          onPromoted={(name) => {
+            setAdding(false);
+            toast.success(`${name} is now an administrator as well as a teacher.`);
+            load();
+          }}
           onCreated={(result) => {
             setAdding(false);
             announceInvite(result, true);
@@ -255,7 +312,11 @@ export function AdminTeamCard() {
         open={!!removing}
         onClose={() => setRemoving(null)}
         title={`Remove ${removing?.name ?? "administrator"}?`}
-        description="They will be signed out and will no longer be able to sign in. You can add them again later with the same email address."
+        description={
+          removing?.teaches
+            ? "They also teach, so they keep their sign-in and their classes, but as a teacher only: they will no longer see any administrator pages."
+            : "They will be signed out and will no longer be able to sign in. You can add them again later with the same email address."
+        }
         className="max-w-md"
       >
         <div className="flex justify-end gap-2 border-t pt-4">

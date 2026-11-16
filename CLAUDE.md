@@ -208,6 +208,8 @@ Follow these on every file, every session, without exception.
 - **Removing staff disables the account, it does not delete it** (`User.disabledAt`; `removeTeacher` / `removeAdmin` in `lib/db/staff.ts`), so classes taught and the audit trail keep the name. Disabled accounts cannot sign in, get no reset links, and are filtered out of every staff list and the public site. Any new query that lists teachers or admins must filter `disabledAt: null`.
 - A teacher with upcoming classes can only be removed by handing those classes to another current teacher. An admin cannot remove themself, and a SUPER_ADMIN cannot be removed.
 - Adding a removed person again with the same email re-enables the same account.
+- **One account can be an administrator and a teacher** (an owner who teaches): the role stays ADMIN and the account also has a `Teacher` profile. Add it from Settings → Administrators ("Add as teacher") or by entering the admin's email on Add teacher; entering a teacher's email on Add administrator makes them an admin too. `session.user.teaches` says whether the signed-in account has a current teacher profile, and gives an admin a **My teaching** menu section (the `/teacher/*` pages, which admins may open). Taking one away never takes the other: removing them as a teacher sets `Teacher.removedAt` and leaves the account alone; removing them as an admin turns the account into a TEACHER account (`lib/db/staff.ts`, tested in `tests/staff-roles.test.ts`).
+- **A current teacher is `removedAt: null` and `user.disabledAt: null`** (`CURRENT_TEACHER` in `lib/db/teachers.ts`). Any new query that lists teachers must filter both.
 - **Sessions are re-checked on every request** (`jwt` callback → `lib/account-status.ts`, cached 15 s): a removed or disabled account is signed out at once, and role changes take effect without signing in again. `middleware.ts` only reads the cookie, so API routes must keep calling `getServerSession`.
 
 ### Students, guardians and family groups
@@ -280,7 +282,7 @@ Follow these on every file, every session, without exception.
 | Student | id, firstName, lastName, dob, familyGroupId, guardianId, userId? |
 | Guardian | id, userId, students[], familyGroups[] |
 | FamilyGroup | id, name, students[], guardians[], invoices[] |
-| Teacher | id, userId, bio, specialties[] |
+| Teacher | id, userId, bio, specialties[], removedAt? |
 | Room | id, name, description, capacity |
 | ClassTemplate | id, name, description, style, level, defaultDurationMins, basePriceCents (per-class price), dropInEnabled |
 | ClassSession | id, templateId, teacherId, roomId, startTime, endTime, maxCapacity, isRecurring |

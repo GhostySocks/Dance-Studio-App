@@ -54,6 +54,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
       </a>
       <AppSidebar
         role={session.user.role}
+        teaches={session.user.teaches}
         collapsed={collapsed}
         onToggle={() => setCollapsed(!collapsed)}
       />

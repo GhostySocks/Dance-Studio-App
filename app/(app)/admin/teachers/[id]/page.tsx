@@ -50,6 +50,7 @@ interface Teacher {
     name: string | null;
     email: string;
     image: string | null;
+    role: string;
   };
   sessions: Session[];
   /** Classes they are still due to teach. */
@@ -103,7 +104,9 @@ export default function AdminTeacherDetailPage() {
       }
       const moved: number = json.data.reassigned;
       toast.success(
-        `${teacher.user.name ?? "Teacher"} was removed.` +
+        (json.data.keptAccount
+          ? `${teacher.user.name ?? "They"} no longer teaches, and is still an administrator.`
+          : `${teacher.user.name ?? "Teacher"} was removed.`) +
           (moved > 0 ? ` ${moved} upcoming class${moved === 1 ? " was" : "es were"} reassigned.` : "")
       );
       router.push("/admin/teachers");
@@ -249,7 +252,11 @@ export default function AdminTeacherDetailPage() {
         open={removing}
         onClose={() => setRemoving(false)}
         title={`Remove ${teacher.user.name ?? "this teacher"}?`}
-        description="They will no longer be able to sign in and will not appear on the website. Classes they have already taught, and their attendance records, stay on file under their name."
+        description={
+          teacher.user.role === "TEACHER"
+            ? "They will no longer be able to sign in and will not appear on the website. Classes they have already taught, and their attendance records, stay on file under their name."
+            : "They are also an administrator, so they keep their sign-in and administrator access. They will no longer be listed as a teacher or appear on the website. Classes they have already taught stay on file under their name."
+        }
         className="max-w-lg"
       >
         {teacher.upcomingCount > 0 && (

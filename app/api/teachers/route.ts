@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { requireAdmin } from "@/lib/api-auth";
-import { createTeacherAccount, findAccountByEmail, reactivateTeacher } from "@/lib/db/staff";
+import { addTeacherProfile, createTeacherAccount, findAccountByEmail, reactivateTeacher } from "@/lib/db/staff";
 import { getTeachers } from "@/lib/db/teachers";
 import { EMAIL_IN_USE, inviteStaff, isDuplicateEmail } from "@/lib/staff-api";
 import { newTeacherSchema, parseSpecialties } from "@/lib/validations/staff";
@@ -48,6 +48,18 @@ export async function POST(req: NextRequest) {
 
     const existing = await findAccountByEmail(data.email);
     if (existing) {
+      // An administrator who also teaches: same account and sign-in, plus a teacher profile
+      const isAdminAccount = existing.role === "ADMIN" || existing.role === "SUPER_ADMIN";
+      if (isAdminAccount && !existing.disabledAt) {
+        if (existing.teacher && !existing.teacher.removedAt) {
+          return NextResponse.json({ error: `${existing.name} is already a teacher.` }, { status: 409 });
+        }
+        const added = await addTeacherProfile(existing.id, profile, session.user.id);
+        return NextResponse.json(
+          { data: { id: added.teacherId, existingAdmin: true, name: existing.name, emailed: false, inviteUrl: null } },
+          { status: 201 }
+        );
+      }
       // A teacher who was removed earlier comes back with their history
       if (!(existing.disabledAt && existing.role === "TEACHER" && existing.teacher)) {
         return NextResponse.json({ error: EMAIL_IN_USE }, { status: 409 });

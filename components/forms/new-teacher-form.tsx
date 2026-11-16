@@ -16,9 +16,12 @@ import { RequiredMark, RequiredNote } from "@/components/required-mark";
 /** Admin adds a teacher. The teacher sets their own password through an emailed link. */
 export function NewTeacherForm({
   onCreated,
+  onLinked,
   onCancel,
 }: {
   onCreated: (result: InviteResult) => void;
+  /** An existing administrator was made a teacher too: no invitation is involved */
+  onLinked: (name: string) => void;
   onCancel: () => void;
 }) {
   const { register, handleSubmit, formState } = useForm<NewTeacherFormData>({
@@ -37,6 +40,10 @@ export function NewTeacherForm({
       const json = await res.json().catch(() => null);
       if (!res.ok) {
         toast.error(typeof json?.error === "string" ? json.error : "Could not add teacher");
+        return;
+      }
+      if (json.data.existingAdmin) {
+        onLinked(json.data.name ?? values.name);
         return;
       }
       onCreated({ name: values.name, emailed: json.data.emailed, inviteUrl: json.data.inviteUrl });
@@ -79,7 +86,8 @@ export function NewTeacherForm({
           />
           {error("teacher-email", errors.email?.message) ?? (
             <p id="teacher-email-hint" className="text-sm text-muted-foreground">
-              They sign in with this address.
+              They sign in with this address. Enter an administrator&apos;s email to make them a
+              teacher as well, with the same sign-in.
             </p>
           )}
         </div>

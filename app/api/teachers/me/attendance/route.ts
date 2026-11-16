@@ -15,7 +15,8 @@ export async function GET() {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    if (!hasRole(session, "TEACHER")) {
+    // A teacher, or an administrator who also teaches
+    if (!hasRole(session, "TEACHER") && !session.user.teaches) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
