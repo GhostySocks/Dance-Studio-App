@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { SessionRow } from "@/components/public/session-row";
 import { WEEKDAYS, dayLabel, monthGrid, monthLabel, monthOf, monthsBetween } from "@/lib/calendar-grid";
+import { closedDays, type ClosureDays } from "@/lib/closures";
 import type { PublicSession } from "@/lib/db/public";
 import { dayKey } from "@/lib/schedule-format";
 import { cn } from "@/lib/utils";
@@ -28,11 +29,15 @@ function startTime(session: PublicSession, timeZone: string) {
 export function ScheduleCalendar({
   sessions,
   timeZone,
+  closures = [],
 }: {
   /** Already filtered, soonest first. */
   sessions: PublicSession[];
   timeZone: string;
+  /** Days the studio is closed; they are blocked out on the grid */
+  closures?: ClosureDays[];
 }) {
+  const closed = useMemo(() => closedDays(closures), [closures]);
   const byDay = useMemo(() => {
     const map = new Map<string, PublicSession[]>();
     for (const session of sessions) {
@@ -139,6 +144,24 @@ export function ScheduleCalendar({
                     {day.dayOfMonth}
                   </span>
                 );
+
+                const closedFor = day.inMonth ? closed.get(day.key) : undefined;
+                if (closedFor) {
+                  return (
+                    <div
+                      key={day.key}
+                      role="gridcell"
+                      aria-label={`${dayLabel(day.key)}, studio closed: ${closedFor}`}
+                      className="closed-day min-h-16 border-b border-r p-1 last:border-r-0 sm:min-h-24 sm:p-1.5"
+                    >
+                      {dayNumber}
+                      <span aria-hidden className="mt-1 block text-[11px] font-semibold leading-tight text-muted-foreground">
+                        Closed
+                        <span className="hidden truncate font-normal sm:block">{closedFor}</span>
+                      </span>
+                    </div>
+                  );
+                }
 
                 if (classes.length === 0) {
                   return (

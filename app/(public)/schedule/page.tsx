@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { ScheduleBrowser } from "@/components/public/schedule-browser";
-import { getPublicSchedule, getPublicStudio } from "@/lib/db/public";
+import { getPublicClosures, getPublicSchedule, getPublicStudio } from "@/lib/db/public";
 
 export const metadata: Metadata = {
   title: "Class schedule",
@@ -13,7 +13,11 @@ export default async function SchedulePage({
 }: {
   searchParams: { view?: string | string[] };
 }) {
-  const [studio, sessions] = await Promise.all([getPublicStudio(), getPublicSchedule()]);
+  const [studio, sessions, closures] = await Promise.all([
+    getPublicStudio(),
+    getPublicSchedule(),
+    getPublicClosures(),
+  ]);
   const initialView = searchParams.view === "list" ? "list" : "calendar";
 
   return (
@@ -23,7 +27,12 @@ export default async function SchedulePage({
         Upcoming classes for the next eight weeks. Times are shown in the studio&apos;s local time.
       </p>
       <div className="mt-8">
-        <ScheduleBrowser sessions={sessions} timeZone={studio.timezone} initialView={initialView} />
+        <ScheduleBrowser
+          sessions={sessions}
+          timeZone={studio.timezone}
+          initialView={initialView}
+          closures={closures}
+        />
       </div>
     </div>
   );

@@ -1,7 +1,9 @@
 import { cache } from "react";
 
 import { prisma } from "@/lib/prisma";
+import { closedDays, type ClosureDays } from "@/lib/closures";
 import { cachedStudio } from "@/lib/studio-cache";
+import { dayIn } from "@/lib/timezone";
 import type { Prisma } from "@prisma/client";
 
 /**
@@ -53,26 +55,50 @@ function toPublicSession(row: PublicSessionRow): PublicSession {
   };
 }
 
-/** Upcoming sessions of active classes, soonest first. */
+/**
+ * Days the studio is closed, from today on (name and days only). Cached per
+ * request: the schedule queries below use it too.
+ */
+export const getPublicClosures = cache(async function getPublicClosures(): Promise<ClosureDays[]> {
+  const studio = await getPublicStudio();
+  return prisma.studioClosure.findMany({
+    where: { endDay: { gte: dayIn(studio.timezone, new Date()) } },
+    select: { name: true, startDay: true, endDay: true },
+    orderBy: { startDay: "asc" },
+  });
+});
+
+/** Upcoming sessions of active classes, soonest first. Days the studio is closed are left out. */
 export async function getPublicSchedule({ days = 56, take = 200 } = {}): Promise<PublicSession[]> {
   const now = new Date();
   const until = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
 
-  const rows = await prisma.classSession.findMany({
-    where: { startTime: { gte: now, lte: until }, template: { isActive: true } },
-    select: publicSessionSelect,
-    orderBy: { startTime: "asc" },
-    take,
-  });
-  return rows.map(toPublicSession);
+  const [rows, studio, closures] = await Promise.all([
+    prisma.classSession.findMany({
+      where: { startTime: { gte: now, lte: until }, template: { isActive: true } },
+      select: publicSessionSelect,
+      orderBy: { startTime: "asc" },
+      take,
+    }),
+    getPublicStudio(),
+    getPublicClosures(),
+  ]);
+  const closed = closedDays(closures);
+  return rows.filter((row) => !closed.has(dayIn(studio.timezone, row.startTime))).map(toPublicSession);
 }
 
+/** One bookable session, or null if it has started, is retired or falls on a closed day. */
 export async function getPublicSession(id: string): Promise<PublicSession | null> {
-  const row = await prisma.classSession.findFirst({
-    where: { id, startTime: { gte: new Date() }, template: { isActive: true } },
-    select: publicSessionSelect,
-  });
-  return row ? toPublicSession(row) : null;
+  const [row, studio, closures] = await Promise.all([
+    prisma.classSession.findFirst({
+      where: { id, startTime: { gte: new Date() }, template: { isActive: true } },
+      select: publicSessionSelect,
+    }),
+    getPublicStudio(),
+    getPublicClosures(),
+  ]);
+  if (!row || closedDays(closures).has(dayIn(studio.timezone, row.startTime))) return null;
+  return toPublicSession(row);
 }
 
 /** Active classes with how many sessions are coming up and when the next one is. */

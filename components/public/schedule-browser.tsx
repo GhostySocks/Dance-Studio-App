@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarDays, List, Search } from "lucide-react";
+import { CalendarDays, List, Search, CalendarOff } from "lucide-react";
 
 import { ScheduleCalendar } from "@/components/public/schedule-calendar";
 
 import { SessionRow } from "@/components/public/session-row";
 import { Input } from "@/components/ui/input";
+import { closureRangeLabel, type ClosureDays } from "@/lib/closures";
 import type { PublicSession } from "@/lib/db/public";
 import { groupByDay } from "@/lib/schedule-format";
 import { cn } from "@/lib/utils";
@@ -88,9 +89,12 @@ export function ScheduleBrowser({
   timeZone,
   compact = false,
   initialView = "list",
+  closures = [],
 }: {
   sessions: PublicSession[];
   timeZone: string;
+  /** Upcoming days the studio is closed */
+  closures?: ClosureDays[];
   /** Hide search, filters and the view toggle (used by the embeddable widget). */
   compact?: boolean;
   /** The public page opens on the calendar; ?view=list in its URL opens on the list. */
@@ -158,13 +162,29 @@ export function ScheduleBrowser({
       )}
 
       {!compact && (
-        <div className="flex justify-end">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          {closures.length > 0 ? (
+            <ul aria-label="Studio closures" className="space-y-1 text-sm text-muted-foreground">
+              {closures.slice(0, 3).map((closure) => (
+                <li key={`${closure.startDay}-${closure.name}`} className="flex items-center gap-2">
+                  <CalendarOff className="h-4 w-4 shrink-0" aria-hidden />
+                  <span>
+                    <span className="font-medium text-foreground">Closed {closureRangeLabel(closure)}</span>
+                    {" · "}
+                    {closure.name}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <span />
+          )}
           <ViewToggle view={view} onChange={changeView} />
         </div>
       )}
 
       {view === "calendar" && !compact ? (
-        <ScheduleCalendar sessions={filtered} timeZone={timeZone} />
+        <ScheduleCalendar sessions={filtered} timeZone={timeZone} closures={closures} />
       ) : days.length === 0 ? (
         <p className="rounded-2xl bg-white p-8 text-center text-muted-foreground shadow-sm">
           {sessions.length === 0

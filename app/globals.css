@@ -140,3 +140,146 @@
     background: hsl(var(--cta));
   }
 }
+
+/* A day the studio is closed, on the public and admin calendars: soft diagonal stripes */
+.closed-day {
+  background-image: repeating-linear-gradient(
+    135deg,
+    hsl(var(--muted)) 0 8px,
+    hsl(var(--background)) 8px 16px
+  );
+}
+
+/*
+ * The admin schedule (FullCalendar), restyled to match the rest of the app:
+ * soft borders, rounded pill buttons in the brand colour, quiet headers.
+ */
+.studio-calendar .fc {
+  --fc-border-color: hsl(var(--border));
+  --fc-today-bg-color: hsl(var(--accent));
+  --fc-now-indicator-color: hsl(var(--cta));
+  --fc-page-bg-color: #fff;
+  --fc-neutral-bg-color: hsl(var(--muted));
+  --fc-event-text-color: hsl(var(--foreground));
+  --fc-bg-event-opacity: 1;
+  font-size: 0.8125rem;
+}
+.studio-calendar .fc .fc-toolbar.fc-header-toolbar {
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.studio-calendar .fc .fc-toolbar-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+.studio-calendar .fc .fc-button {
+  border: 1px solid hsl(var(--border));
+  background: #fff;
+  color: hsl(var(--muted-foreground));
+  border-radius: 9999px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-transform: none;
+  box-shadow: none;
+  transition: background-color 0.15s, color 0.15s;
+}
+.studio-calendar .fc .fc-button:hover {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+.studio-calendar .fc .fc-button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+.studio-calendar .fc .fc-button:disabled {
+  opacity: 0.5;
+}
+.studio-calendar .fc .fc-button-primary:not(:disabled).fc-button-active,
+.studio-calendar .fc .fc-button-primary:not(:disabled):active {
+  background: hsl(var(--primary));
+  border-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+/* Grouped buttons (prev/next, Month/Week/Day) read as one pill */
+.studio-calendar .fc .fc-button-group {
+  gap: 0.25rem;
+}
+.studio-calendar .fc .fc-button-group > .fc-button {
+  border-radius: 9999px;
+  margin-left: 0;
+}
+.studio-calendar .fc .fc-scrollgrid {
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+.studio-calendar .fc .fc-col-header-cell {
+  background: hsl(var(--muted) / 0.6);
+}
+.studio-calendar .fc .fc-col-header-cell-cushion {
+  padding: 0.6rem 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+.studio-calendar .fc .fc-day-today .fc-col-header-cell-cushion {
+  color: hsl(var(--primary));
+}
+.studio-calendar .fc .fc-timegrid-slot-label-cushion,
+.studio-calendar .fc .fc-daygrid-day-number {
+  font-size: 0.6875rem;
+  color: hsl(var(--muted-foreground));
+}
+.studio-calendar .fc .fc-timegrid-slot {
+  height: 1.9rem;
+}
+.studio-calendar .fc .fc-timegrid-slot-minor {
+  border-top-style: dotted;
+}
+.studio-calendar .fc .fc-event {
+  cursor: pointer;
+  border: 0;
+  box-shadow: none;
+  transition: filter 0.15s, transform 0.15s;
+}
+.studio-calendar .fc .fc-event:hover {
+  filter: brightness(0.96);
+}
+.studio-calendar .fc .fc-event:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 1px;
+}
+.studio-calendar .fc .fc-event-main {
+  padding: 0;
+}
+.studio-calendar .fc .fc-daygrid-event {
+  margin-top: 2px;
+  white-space: normal;
+}
+.studio-calendar .fc .fc-daygrid-dot-event {
+  padding: 0;
+}
+.studio-calendar .fc .fc-daygrid-dot-event > div {
+  width: 100%;
+}
+/* Closure banner */
+.studio-calendar .fc .fc-closure,
+.studio-calendar .fc .fc-closure:hover {
+  background: hsl(var(--foreground) / 0.85);
+  border-radius: 9999px;
+}
+.studio-calendar .fc .fc-closure .fc-event-main {
+  color: #fff;
+}
+.studio-calendar .fc .fc-more-link {
+  font-size: 0.6875rem;
+  color: hsl(var(--primary));
+}
+/* The striped block behind closed days, without FullCalendar's own tint */
+.studio-calendar .fc .fc-bg-event.closed-day {
+  background-color: transparent;
+  opacity: 1;
+}
