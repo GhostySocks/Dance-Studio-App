@@ -1,7 +1,12 @@
 import { closedDays } from "@/lib/closures";
 import { getClosures } from "@/lib/db/closures";
 import { prisma } from "@/lib/prisma";
-import { summarizeTaught, type TaughtClass, type TeacherReportTotals } from "@/lib/teacher-report";
+import {
+  summarizeTaught,
+  type CoveredClass,
+  type TaughtClass,
+  type TeacherReportTotals,
+} from "@/lib/teacher-report";
 import { dayIn, endOfDayIn, startOfDayIn } from "@/lib/timezone";
 
 export interface TeacherReport {
@@ -12,6 +17,8 @@ export interface TeacherReport {
   timeZone: string;
   classes: TaughtClass[];
   totals: TeacherReportTotals;
+  /** This teacher's own classes that a substitute taught in the period (not counted above) */
+  covered: CoveredClass[];
 }
 
 /** The teacher profile belonging to a signed-in teacher, if any. */
@@ -23,7 +30,9 @@ export async function getTeacherIdForUser(userId: string): Promise<string | null
 /**
  * The classes a teacher taught between two studio calendar days (both included).
  * Only classes that have already started count, and classes on days the studio
- * was closed are left out. Returns null if the teacher does not exist.
+ * was closed are left out. A class taught by a substitute counts for the
+ * substitute; the regular teacher's report lists it separately. Returns null if
+ * the teacher does not exist.
  */
 export async function getTeacherReport({
   teacherId,
@@ -38,7 +47,8 @@ export async function getTeacherReport({
 }): Promise<TeacherReport | null> {
   const now = new Date();
   const periodEnd = endOfDayIn(timeZone, endDay);
-  const [teacher, sessions, closures] = await Promise.all([
+  const period = { gte: startOfDayIn(timeZone, startDay), lte: periodEnd < now ? periodEnd : now };
+  const [teacher, sessions, closures, coveredSessions] = await Promise.all([
     prisma.teacher.findUnique({
       where: { id: teacherId },
       select: { id: true, user: { select: { name: true } } },
@@ -46,10 +56,7 @@ export async function getTeacherReport({
     prisma.classSession.findMany({
       where: {
         teacherId,
-        startTime: {
-          gte: startOfDayIn(timeZone, startDay),
-          lte: periodEnd < now ? periodEnd : now,
-        },
+        startTime: period,
       },
       select: {
         id: true,
@@ -57,12 +64,25 @@ export async function getTeacherReport({
         endTime: true,
         template: { select: { name: true } },
         room: { select: { name: true } },
+        substituteFor: { select: { user: { select: { name: true } } } },
         _count: { select: { enrollments: { where: { status: "ACTIVE" } } } },
         attendance: { where: { lockedAt: { not: null } }, select: { status: true } },
       },
       orderBy: { startTime: "asc" },
     }),
     getClosures({ from: startDay, to: endDay }),
+    prisma.classSession.findMany({
+      where: { substituteForId: teacherId, startTime: period },
+      select: {
+        id: true,
+        startTime: true,
+        endTime: true,
+        substituteReason: true,
+        template: { select: { name: true } },
+        teacher: { select: { user: { select: { name: true } } } },
+      },
+      orderBy: { startTime: "asc" },
+    }),
   ]);
   if (!teacher) return null;
 
@@ -81,6 +101,19 @@ export async function getTeacherReport({
         session.attendance.length === 0
           ? null
           : session.attendance.filter((a) => a.status === "PRESENT" || a.status === "LATE").length,
+      coveringFor: session.substituteFor ? (session.substituteFor.user.name ?? "another teacher") : null,
+    }));
+
+  const covered: CoveredClass[] = coveredSessions
+    .filter((session) => !closed.has(dayIn(timeZone, session.startTime)))
+    .map((session) => ({
+      sessionId: session.id,
+      className: session.template.name,
+      startTime: session.startTime.toISOString(),
+      endTime: session.endTime.toISOString(),
+      minutes: Math.round((session.endTime.getTime() - session.startTime.getTime()) / 60000),
+      substituteName: session.teacher.user.name ?? "A substitute",
+      reason: session.substituteReason,
     }));
 
   return {
@@ -90,5 +123,6 @@ export async function getTeacherReport({
     timeZone,
     classes,
     totals: summarizeTaught(classes),
+    covered,
   };
 }

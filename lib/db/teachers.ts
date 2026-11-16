@@ -96,6 +96,8 @@ export async function getTeacherUpcomingClasses(userId: string) {
           maxCapacity: true,
           template: { select: { name: true, danceStyle: true } },
           room: { select: { name: true } },
+          // Set when this teacher is covering the date for someone else
+          substituteFor: { select: { user: { select: { name: true } } } },
           enrollments: {
             where: { status: { in: ["ACTIVE", "WAITLIST"] } },
             select: {

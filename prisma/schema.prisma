@@ -241,7 +241,9 @@ model Teacher {
   specialties String[]
   photo       String?
   phone       String?
-  sessions    ClassSession[]
+  sessions    ClassSession[] @relation("SessionTeacher")
+  /// Class dates this teacher normally takes that a substitute taught instead
+  coveredSessions ClassSession[] @relation("SubstituteFor")
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 }
@@ -278,8 +280,13 @@ model ClassSession {
   id          String        @id @default(cuid())
   template    ClassTemplate @relation(fields: [templateId], references: [id])
   templateId  String
-  teacher     Teacher       @relation(fields: [teacherId], references: [id])
+  /// Who teaches this date. When a substitute is covering, this is the substitute.
+  teacher     Teacher       @relation("SessionTeacher", fields: [teacherId], references: [id])
   teacherId   String
+  /// Set while a substitute is covering: the regular teacher they stand in for
+  substituteFor    Teacher? @relation("SubstituteFor", fields: [substituteForId], references: [id], onDelete: SetNull)
+  substituteForId  String?
+  substituteReason String?
   room        Room          @relation(fields: [roomId], references: [id])
   roomId      String
   startTime   DateTime
@@ -291,6 +298,8 @@ model ClassSession {
   attendance  Attendance[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+
+  @@index([substituteForId])
 }
 
 /// The studio year (e.g. Sep 2026 to Jun 2027). Annual registrations cover a season.

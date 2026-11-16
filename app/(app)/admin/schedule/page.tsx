@@ -63,11 +63,13 @@ function renderEvent(arg: EventContentArg) {
       <p className="truncate font-semibold">
         {month && <span className="font-normal">{arg.timeText} </span>}
         {session.template?.name}
+        {month && session.substituteFor ? " (sub)" : ""}
       </p>
       {!month && (
         <>
           <p className="truncate opacity-80">{arg.timeText}</p>
           <p className="truncate opacity-80">
+            {session.substituteFor ? "Sub: " : ""}
             {session.teacher?.user.name ?? "Unknown"} · {session.room?.name}
           </p>
         </>
@@ -92,12 +94,17 @@ interface Session {
     id: string;
     user: { name: string | null };
   };
+  /** The regular teacher, when a substitute (the `teacher` above) is covering this date */
+  substituteFor?: { id: string; user: { name: string | null } } | null;
+  substituteReason?: string | null;
   room: {
     id: string;
     name: string;
     capacity: number;
   };
   _count?: { enrollments: number };
+  /** Active enrollments, as the sessions API returns them */
+  enrollments?: { id: string }[];
 }
 
 interface ClassTemplate {
@@ -143,6 +150,10 @@ export default function SchedulePage() {
     start: string;
     end: string;
   } | null>(null);
+
+  const [subTeacherId, setSubTeacherId] = useState("");
+  const [subReason, setSubReason] = useState("");
+  const [subBusy, setSubBusy] = useState(false);
 
   const [closures, setClosures] = useState<Closure[]>([]);
   const [closureOpen, setClosureOpen] = useState(false);
@@ -272,6 +283,28 @@ export default function SchedulePage() {
     fetchClosures();
   }, [fetchClosures]);
 
+  /** Assigns the chosen substitute to the open class, or (with no teacher) hands it back. */
+  async function saveSubstitute(remove: boolean) {
+    if (!detailSession) return;
+    setSubBusy(true);
+    try {
+      const res = await fetch(`/api/sessions/${detailSession.id}/substitute`, {
+        method: remove ? "DELETE" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: remove ? undefined : JSON.stringify({ teacherId: subTeacherId, reason: subReason || undefined }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(typeof json?.error === "string" ? json.error : "Could not update the substitute");
+      toast.success(remove ? "Class handed back to its regular teacher" : "Substitute assigned");
+      setDetailSession(null);
+      fetchSessions();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Could not update the substitute");
+    } finally {
+      setSubBusy(false);
+    }
+  }
+
   function openClosureDialog() {
     closureForm.reset({ name: "", startDay: "", endDay: "" });
     setClosureOpen(true);
@@ -338,6 +371,8 @@ export default function SchedulePage() {
       return;
     }
     const session = arg.event.extendedProps as Session;
+    setSubTeacherId("");
+    setSubReason("");
     setDetailSession({
       ...session,
       id: arg.event.id,
@@ -681,7 +716,14 @@ export default function SchedulePage() {
                 <span className="font-medium">
                   {detailSession.teacher.user.name ?? "Unknown"}
                 </span>
+                {detailSession.substituteFor && <Badge variant="secondary">Substitute</Badge>}
               </div>
+              {detailSession.substituteFor && (
+                <p className="-mt-1 pl-6 text-xs text-muted-foreground">
+                  Covering for {detailSession.substituteFor.user.name ?? "the regular teacher"}
+                  {detailSession.substituteReason ? ` · ${detailSession.substituteReason}` : ""}
+                </p>
+              )}
 
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-muted-foreground" />
@@ -704,7 +746,7 @@ export default function SchedulePage() {
                 <Users className="h-4 w-4 text-muted-foreground" />
                 <span className="text-muted-foreground">Enrolled:</span>
                 <span className="font-medium">
-                  {detailSession._count?.enrollments ?? 0} /{" "}
+                  {detailSession._count?.enrollments ?? detailSession.enrollments?.length ?? 0} /{" "}
                   {detailSession.maxCapacity}
                 </span>
               </div>
@@ -715,6 +757,52 @@ export default function SchedulePage() {
                   <p>{detailSession.notes}</p>
                 </div>
               )}
+            </div>
+
+            <div className="grid gap-3 rounded-xl border bg-muted/40 p-4">
+              <h3 className="text-sm font-semibold">
+                {detailSession.substituteFor ? "Change the substitute" : "Substitute teacher"}
+              </h3>
+              <p className="-mt-2 text-xs text-muted-foreground">
+                For when the regular teacher is out. The substitute takes this date only: they see the
+                roster, take attendance, and the class counts on their pay report.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label>Substitute</Label>
+                  <StyledSelect
+                    value={subTeacherId}
+                    onChange={setSubTeacherId}
+                    placeholder="Choose a teacher"
+                    options={teachers
+                      .filter(
+                        (t) => t.id !== detailSession.teacher.id && t.id !== detailSession.substituteFor?.id
+                      )
+                      .map((t) => ({ value: t.id, label: t.user.name ?? "Teacher" }))}
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="sub-reason">Reason (optional)</Label>
+                  <Input
+                    id="sub-reason"
+                    placeholder="Out sick"
+                    maxLength={200}
+                    value={subReason}
+                    onChange={(e) => setSubReason(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex flex-wrap justify-end gap-2">
+                {detailSession.substituteFor && (
+                  <Button variant="outline" size="sm" disabled={subBusy} onClick={() => saveSubstitute(true)}>
+                    Remove substitute
+                  </Button>
+                )}
+                <Button size="sm" disabled={subBusy || !subTeacherId} onClick={() => saveSubstitute(false)}>
+                  {subBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
+                  Assign substitute
+                </Button>
+              </div>
             </div>
 
             <div className="flex justify-end pt-4 border-t">

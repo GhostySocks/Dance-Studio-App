@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import { payOwedCents, summarizeTaught, type TaughtClass } from "@/lib/teacher-report";
 
-function taught(className: string, minutes: number, attended: number | null = 5): TaughtClass {
+function taught(
+  className: string,
+  minutes: number,
+  attended: number | null = 5,
+  coveringFor: string | null = null
+): TaughtClass {
   return {
     sessionId: `${className}-${minutes}-${Math.random()}`,
     className,
@@ -12,6 +17,7 @@ function taught(className: string, minutes: number, attended: number | null = 5)
     minutes,
     enrolled: 8,
     attended,
+    coveringFor,
   };
 }
 
@@ -33,6 +39,13 @@ describe("summarizeTaught", () => {
       { className: "Hip Hop", classes: 1, minutes: 90 },
       { className: "Jazz", classes: 2, minutes: 120 },
     ]);
+  });
+
+  it("counts classes taught as a substitute, which are paid like any other", () => {
+    const totals = summarizeTaught([taught("Jazz", 60), taught("Ballet", 45, 5, "Maria Garcia")]);
+    expect(totals.classes).toBe(2);
+    expect(totals.minutes).toBe(105);
+    expect(totals.asSubstitute).toBe(1);
   });
 
   it("rounds hours to two decimals", () => {

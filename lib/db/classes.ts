@@ -157,6 +157,8 @@ export async function getClassSessions({
     include: {
       template: { select: { name: true, danceStyle: true, basePriceCents: true } },
       teacher: { select: { id: true, user: { select: { name: true } } } },
+      // The regular teacher, when a substitute is covering this date
+      substituteFor: { select: { id: true, user: { select: { name: true } } } },
       room: { select: { id: true, name: true } },
       enrollments: { where: { status: "ACTIVE" }, select: { id: true } },
     },

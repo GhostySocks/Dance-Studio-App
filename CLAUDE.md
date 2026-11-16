@@ -358,6 +358,11 @@ Admin can bypass with an explicit `force: true` flag.
 - Closed days are striped (`.closed-day`) on the admin calendar and the public schedule. **Classes on a closed day are not cancelled**, but `getPublicSchedule` / `getPublicSession` leave them out so they cannot be booked, and the teacher pay report does not count them.
 - The admin Schedule page is FullCalendar themed by `.studio-calendar` in `app/globals.css`; events are drawn by `renderEvent`.
 
+### Substitute teachers
+- When a teacher is out, an admin assigns a substitute to that one class date from the class details on the Schedule page (`assignSubstitute` / `removeSubstitute` in `lib/db/substitutes.ts`, `POST|DELETE /api/sessions/[id]/substitute`). **The substitute becomes `ClassSession.teacherId`**, so the roster, attendance access, the public schedule and the pay report all follow them; the regular teacher is kept in `substituteForId` (with an optional `substituteReason`) so it can be shown, reported and undone. Past dates can be recorded after the fact.
+- A substitute cannot be the regular teacher, a removed teacher, or someone already teaching an overlapping class. Changing the substitute keeps the original regular teacher.
+- Pay report: a substituted class counts for the substitute (tagged "Sub for …"); the regular teacher report lists it under "Taught by a substitute" and does not count it.
+
 ### Teacher pay report
 - Teachers are contractors paid outside the app. `/admin/teacher-pay` (admin, any teacher) and `/teacher/report` (own classes only, looked up from the session) list the classes taught between two studio days with totals (`getTeacherReport`, `lib/teacher-report.ts`). A class counts once it has started; closed days are excluded. The admin page can apply a per-class or per-hour rate to get a total, but **no pay rate is stored** and nothing is paid through the app.
 

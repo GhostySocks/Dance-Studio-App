@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { RequiredMark } from "@/components/required-mark";
 import { StyledSelect } from "@/components/styled-select";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -95,7 +96,7 @@ export function TeacherPayReport({ teachers }: { teachers?: { id: string; name: 
       ["Teacher", report.teacher.name],
       ["Period", `${report.startDay} to ${report.endDay}`],
       [],
-      ["Date", "Start", "End", "Class", "Room", "Minutes", "Enrolled", "Attended"],
+      ["Date", "Start", "End", "Class", "Room", "Minutes", "Enrolled", "Attended", "Substitute for"],
       ...report.classes.map((c) => [
         formatDate(c.startTime),
         formatTime(c.startTime),
@@ -105,11 +106,28 @@ export function TeacherPayReport({ teachers }: { teachers?: { id: string; name: 
         c.minutes,
         c.enrolled,
         c.attended ?? "not submitted",
+        c.coveringFor ?? "",
       ]),
       [],
       ["Classes taught", report.totals.classes],
       ["Hours taught", report.totals.hours],
+      ["Of which as a substitute", report.totals.asSubstitute],
     ];
+    if (report.covered.length > 0) {
+      rows.push([], ["Own classes taught by a substitute (not counted above)"]);
+      rows.push(["Date", "Start", "End", "Class", "Substitute", "Minutes", "Reason"]);
+      for (const c of report.covered) {
+        rows.push([
+          formatDate(c.startTime),
+          formatTime(c.startTime),
+          formatTime(c.endTime),
+          c.className,
+          c.substituteName,
+          c.minutes,
+          c.reason ?? "",
+        ]);
+      }
+    }
     if (admin && owed > 0) {
       rows.push([basis === "PER_CLASS" ? "Rate per class" : "Rate per hour", (rateCents / 100).toFixed(2)]);
       rows.push(["Pay owed", (owed / 100).toFixed(2)]);
@@ -217,6 +235,11 @@ export function TeacherPayReport({ teachers }: { teachers?: { id: string; name: 
               <CardContent className="pt-6">
                 <p className="text-sm text-muted-foreground">Classes taught</p>
                 <p className="text-3xl font-bold">{report.totals.classes}</p>
+                {report.totals.asSubstitute > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {report.totals.asSubstitute} as a substitute
+                  </p>
+                )}
               </CardContent>
             </Card>
             <Card className="rounded-2xl border-0 shadow-md">
@@ -326,7 +349,14 @@ export function TeacherPayReport({ teachers }: { teachers?: { id: string; name: 
                           <td className="whitespace-nowrap px-3 py-2">
                             {formatTime(taught.startTime)} – {formatTime(taught.endTime)}
                           </td>
-                          <td className="px-3 py-2 font-medium">{taught.className}</td>
+                          <td className="px-3 py-2 font-medium">
+                            {taught.className}
+                            {taught.coveringFor && (
+                              <Badge variant="secondary" className="ml-2 font-normal">
+                                Sub for {taught.coveringFor}
+                              </Badge>
+                            )}
+                          </td>
                           <td className="px-3 py-2">{taught.roomName}</td>
                           <td className="whitespace-nowrap px-3 py-2 text-right">{taught.minutes} min</td>
                           <td className="whitespace-nowrap px-3 py-2 text-right">
@@ -351,6 +381,37 @@ export function TeacherPayReport({ teachers }: { teachers?: { id: string; name: 
               )}
             </CardContent>
           </Card>
+
+          {report.covered.length > 0 && (
+            <Card className="rounded-2xl border-0 shadow-md">
+              <CardHeader>
+                <CardTitle>Taught by a substitute</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="mb-3 text-sm text-muted-foreground">
+                  {report.teacher.name}&apos;s own classes that someone else taught in this period. They are
+                  not counted in the totals above; each one counts on the substitute&apos;s report.
+                </p>
+                <ul className="divide-y rounded-xl border text-sm">
+                  {report.covered.map((covered) => (
+                    <li key={covered.sessionId} className="flex flex-wrap justify-between gap-x-4 gap-y-1 px-3 py-2">
+                      <span>
+                        <span className="font-medium">{covered.className}</span>
+                        <span className="text-muted-foreground">
+                          {" · "}
+                          {formatDate(covered.startTime)}, {formatTime(covered.startTime)}
+                        </span>
+                      </span>
+                      <span className="text-muted-foreground">
+                        Taught by {covered.substituteName}
+                        {covered.reason ? ` · ${covered.reason}` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
     </div>

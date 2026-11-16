@@ -15,6 +15,19 @@ export interface TaughtClass {
   enrolled: number;
   /** Students marked present or late; null until attendance is submitted */
   attended: number | null;
+  /** The regular teacher, when this teacher taught the class as a substitute */
+  coveringFor: string | null;
+}
+
+/** One of this teacher's own classes that a substitute taught instead (not paid to them). */
+export interface CoveredClass {
+  sessionId: string;
+  className: string;
+  startTime: string;
+  endTime: string;
+  minutes: number;
+  substituteName: string;
+  reason: string | null;
 }
 
 export interface TeacherReportTotals {
@@ -24,6 +37,8 @@ export interface TeacherReportTotals {
   hours: number;
   /** Classes whose attendance has not been submitted */
   attendanceMissing: number;
+  /** How many of the classes were taught as a substitute for someone else */
+  asSubstitute: number;
   byClass: { className: string; classes: number; minutes: number }[];
 }
 
@@ -42,6 +57,7 @@ export function summarizeTaught(classes: TaughtClass[]): TeacherReportTotals {
     minutes,
     hours: Math.round((minutes / 60) * 100) / 100,
     attendanceMissing: classes.filter((taught) => taught.attended === null).length,
+    asSubstitute: classes.filter((taught) => taught.coveringFor !== null).length,
     byClass: Array.from(groups.values()).sort((a, b) => a.className.localeCompare(b.className)),
   };
 }

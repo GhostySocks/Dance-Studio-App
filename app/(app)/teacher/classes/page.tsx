@@ -14,6 +14,8 @@ interface Session {
   maxCapacity: number;
   template: { name: string; danceStyle: string };
   room: { name: string };
+  /** Set when this teacher is covering the date for someone else */
+  substituteFor: { user: { name: string | null } } | null;
   enrollments: {
     id: string;
     status: "ACTIVE" | "WAITLIST";
@@ -110,6 +112,13 @@ export default function TeacherClassesPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2 text-sm">
+                  {session.substituteFor && (
+                    <p>
+                      <Badge variant="outline">
+                        Covering for {session.substituteFor.user.name ?? "another teacher"}
+                      </Badge>
+                    </p>
+                  )}
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Clock className="h-4 w-4 shrink-0" />
                     <span>{formatDateTime(session.startTime)}</span>
