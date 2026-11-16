@@ -32,23 +32,45 @@ type NavItem = {
   icon: React.ComponentType<{ className?: string }>;
 };
 
-const adminNav: NavItem[] = [
-  { title: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
-  { title: "Students", href: "/admin/students", icon: Users },
-  { title: "Families", href: "/admin/families", icon: UserCircle },
-  { title: "Teachers", href: "/admin/teachers", icon: GraduationCap },
-  { title: "Classes", href: "/admin/classes", icon: BookOpen },
-  { title: "Rooms", href: "/admin/rooms", icon: DoorOpen },
-  { title: "Terms", href: "/admin/terms", icon: CalendarRange },
-  { title: "Term Enrollments", href: "/admin/registrations", icon: ClipboardList },
-  { title: "Class Enrollments", href: "/admin/enrollments", icon: UserCheck },
-  { title: "Attendance", href: "/admin/attendance", icon: ClipboardCheck },
-  { title: "Schedule", href: "/admin/schedule", icon: Calendar },
-  { title: "Billing", href: "/admin/billing", icon: Receipt },
-  { title: "Scholarships", href: "/admin/scholarships", icon: Award },
-  { title: "Reports", href: "/admin/reports", icon: BarChart3 },
-  { title: "Teacher Pay", href: "/admin/teacher-pay", icon: Wallet },
-  { title: "Settings", href: "/admin/settings", icon: Settings },
+type NavGroup = { label?: string; items: NavItem[] };
+
+const adminNav: NavGroup[] = [
+  { items: [{ title: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard }] },
+  {
+    label: "Students",
+    items: [
+      { title: "Students", href: "/admin/students", icon: Users },
+      { title: "Families", href: "/admin/families", icon: UserCircle },
+      { title: "Attendance", href: "/admin/attendance", icon: ClipboardCheck },
+    ],
+  },
+  {
+    label: "Classes",
+    items: [
+      { title: "Schedule", href: "/admin/schedule", icon: Calendar },
+      { title: "Classes", href: "/admin/classes", icon: BookOpen },
+      { title: "Term Enrollments", href: "/admin/registrations", icon: ClipboardList },
+      { title: "Class Enrollments", href: "/admin/enrollments", icon: UserCheck },
+      { title: "Terms", href: "/admin/terms", icon: CalendarRange },
+      { title: "Rooms", href: "/admin/rooms", icon: DoorOpen },
+    ],
+  },
+  {
+    label: "Teachers",
+    items: [
+      { title: "Teachers", href: "/admin/teachers", icon: GraduationCap },
+      { title: "Teacher Pay", href: "/admin/teacher-pay", icon: Wallet },
+    ],
+  },
+  {
+    label: "Billing",
+    items: [
+      { title: "Invoices", href: "/admin/billing", icon: Receipt },
+      { title: "Scholarships & Pricing", href: "/admin/scholarships", icon: Award },
+      { title: "Reports", href: "/admin/reports", icon: BarChart3 },
+    ],
+  },
+  { label: "Studio", items: [{ title: "Settings", href: "/admin/settings", icon: Settings }] },
 ];
 
 const teacherNav: NavItem[] = [
@@ -73,19 +95,19 @@ const studentNav: NavItem[] = [
   { title: "Billing", href: "/student/billing", icon: Receipt },
 ];
 
-function getNavForRole(role: string): { label: string; items: NavItem[] } {
+function getNavForRole(role: string): { label: string; groups: NavGroup[] } {
   switch (role) {
     case "SUPER_ADMIN":
     case "ADMIN":
-      return { label: "Administration", items: adminNav };
+      return { label: "Administration", groups: adminNav };
     case "TEACHER":
-      return { label: "Teacher Portal", items: teacherNav };
+      return { label: "Teacher Portal", groups: [{ items: teacherNav }] };
     case "PARENT":
-      return { label: "Parent Portal", items: parentNav };
+      return { label: "Parent Portal", groups: [{ items: parentNav }] };
     case "STUDENT":
-      return { label: "Student Portal", items: studentNav };
+      return { label: "Student Portal", groups: [{ items: studentNav }] };
     default:
-      return { label: "Navigation", items: [] };
+      return { label: "Navigation", groups: [] };
   }
 }
 
@@ -131,31 +153,45 @@ export function AppSidebar({
             {nav.label}
           </p>
         )}
-        <nav aria-label={nav.label} className="space-y-0.5 px-2">
-          {nav.items.map((item) => {
-            const isActive =
-              pathname === item.href ||
-              pathname.startsWith(item.href + "/");
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "relative flex items-center gap-3 rounded-full px-3 py-2.5 text-sm font-medium transition-all duration-200",
-                  isActive
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                  collapsed && "justify-center px-2"
-                )}
-                title={collapsed ? item.title : undefined}
-                aria-label={collapsed ? item.title : undefined}
-                aria-current={isActive ? "page" : undefined}
-              >
-                <item.icon aria-hidden className="h-[18px] w-[18px] shrink-0" />
-                {!collapsed && <span>{item.title}</span>}
-              </Link>
-            );
-          })}
+        <nav aria-label={nav.label} className="px-2">
+          {nav.groups.map((group, index) => (
+            <div
+              key={group.label ?? index}
+              role={group.label ? "group" : undefined}
+              aria-label={group.label}
+              className={cn("space-y-0.5", index > 0 && (collapsed ? "mt-2 border-t pt-2" : "mt-4"))}
+            >
+              {group.label && !collapsed && (
+                <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  {group.label}
+                </p>
+              )}
+              {group.items.map((item) => {
+                const isActive =
+                  pathname === item.href ||
+                  pathname.startsWith(item.href + "/");
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "relative flex items-center gap-3 rounded-full px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                      isActive
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                      collapsed && "justify-center px-2"
+                    )}
+                    title={collapsed ? item.title : undefined}
+                    aria-label={collapsed ? item.title : undefined}
+                    aria-current={isActive ? "page" : undefined}
+                  >
+                    <item.icon aria-hidden className="h-[18px] w-[18px] shrink-0" />
+                    {!collapsed && <span>{item.title}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
       </div>
 
