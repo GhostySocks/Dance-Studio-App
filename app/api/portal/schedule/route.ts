@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/lib/auth";
 import { getPortalClassBrowser } from "@/lib/db/portal-schedule";
-import { hasRole } from "@/lib/permissions";
+import { isPortalUser } from "@/lib/permissions";
 
 // Reads the session cookie, so it can never be prerendered
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (!hasRole(session, "PARENT", "STUDENT")) {
+    if (!isPortalUser(session)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     return NextResponse.json({ data: await getPortalClassBrowser(session.user.id) });

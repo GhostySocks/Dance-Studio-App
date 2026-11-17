@@ -4,6 +4,7 @@ import { ArrowRight, CalendarDays } from "lucide-react";
 
 import { ClassCard } from "@/components/public/class-card";
 import { ClassCarousel } from "@/components/public/class-carousel";
+import { HeroShapes } from "@/components/public/hero-shapes";
 import { ParallaxPhoto } from "@/components/public/parallax-photo";
 import { Reveal, StaggerGroup, StaggerItem } from "@/components/public/reveal";
 import { SessionRow } from "@/components/public/session-row";
@@ -43,8 +44,9 @@ export default async function HomePage() {
 
   return (
     <>
-      <section className="border-b bg-gradient-to-b from-accent to-background">
-        <Reveal className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28">
+      <section className="overflow-hidden border-b bg-gradient-to-b from-accent to-background">
+        <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-20 sm:px-6 md:grid-cols-[minmax(0,1fr)_17rem] md:py-24 lg:grid-cols-[minmax(0,1fr)_27rem]">
+        <Reveal>
           <p className="text-sm font-semibold uppercase tracking-widest text-accent-foreground">
             {studio.name}
           </p>
@@ -65,6 +67,8 @@ export default async function HomePage() {
             </LinkButton>
           </div>
         </Reveal>
+        <HeroShapes className="hidden md:block" />
+        </div>
       </section>
 
       <section aria-labelledby="classes-heading" className="relative isolate overflow-hidden">

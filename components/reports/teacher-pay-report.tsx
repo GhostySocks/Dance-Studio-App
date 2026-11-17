@@ -53,9 +53,20 @@ function csvCell(value: string | number) {
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
+/** The rate field's text as cents: null when empty, NaN when it is not a usable amount. */
+function rateTextToCents(text: string): number | null {
+  if (text.trim() === "") return null;
+  const cents = Math.round(Number(text) * 100);
+  return Number.isFinite(cents) && cents > 0 ? cents : NaN;
+}
+
+/** How long after the last change to the rate it is saved. */
+const RATE_SAVE_DELAY_MS = 700;
+
 /**
  * What a teacher taught in a period, for working out contractor pay. Admins pick
- * the teacher and can try a pay rate; a teacher sees their own classes.
+ * the teacher and set their pay rate, which is kept for that teacher until it is
+ * changed; a teacher sees their own classes.
  */
 export function TeacherPayReport({ teachers }: { teachers?: { id: string; name: string }[] }) {
   const admin = teachers !== undefined;
@@ -71,6 +82,9 @@ export function TeacherPayReport({ teachers }: { teachers?: { id: string; name: 
   const [removing, setRemoving] = useState<TeacherPaymentRecord | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
+  /** The rate kept on the server for the chosen teacher (null while it is loading) */
+  const [savedRate, setSavedRate] = useState<{ teacherId: string; basis: PayBasis; rate: string } | null>(null);
+  const [rateStatus, setRateStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   const ready = (!admin || teacherId !== "") && start !== "" && end !== "" && end >= start;
 
@@ -118,6 +132,61 @@ export function TeacherPayReport({ teachers }: { teachers?: { id: string; name: 
   useEffect(() => {
     loadPayments();
   }, [loadPayments]);
+
+  // The chosen teacher's own rate fills the fields
+  useEffect(() => {
+    if (!admin || teacherId === "") return;
+    let cancelled = false;
+    setSavedRate(null);
+    setRate("");
+    setRateStatus("idle");
+    (async () => {
+      try {
+        const res = await fetch(`/api/teachers/${teacherId}/pay-rate`);
+        const json = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(typeof json?.error === "string" ? json.error : "Failed to load the pay rate");
+        if (cancelled) return;
+        const kept: { basis: PayBasis; rateCents: number } | null = json.data.rate;
+        const text = kept ? (kept.rateCents / 100).toFixed(2) : "";
+        const keptBasis = kept?.basis ?? "PER_CLASS";
+        setBasis(keptBasis);
+        setRate(text);
+        setSavedRate({ teacherId, basis: keptBasis, rate: text });
+      } catch (err: unknown) {
+        if (!cancelled) toast.error(err instanceof Error ? err.message : "Failed to load the pay rate");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [admin, teacherId]);
+
+  // A changed rate is saved for the teacher shortly after the last change
+  useEffect(() => {
+    if (!savedRate || savedRate.teacherId !== teacherId) return;
+    const cents = rateTextToCents(rate);
+    if (Number.isNaN(cents)) return;
+    const savedCents = rateTextToCents(savedRate.rate);
+    if (cents === savedCents && (cents === null || basis === savedRate.basis)) return;
+    const timer = setTimeout(async () => {
+      setRateStatus("saving");
+      try {
+        const res = await fetch(`/api/teachers/${teacherId}/pay-rate`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ basis, rateCents: cents }),
+        });
+        const json = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(typeof json?.error === "string" ? json.error : "Could not save the pay rate");
+        setSavedRate({ teacherId, basis, rate });
+        setRateStatus("saved");
+      } catch (err: unknown) {
+        setRateStatus("error");
+        toast.error(err instanceof Error ? err.message : "Could not save the pay rate");
+      }
+    }, RATE_SAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [savedRate, teacherId, basis, rate]);
 
   const timeZone = report?.timeZone;
   // Today as a studio calendar day (the browser's own day until the report has loaded)
@@ -407,7 +476,12 @@ export function TeacherPayReport({ teachers }: { teachers?: { id: string; name: 
                       inputMode="decimal"
                       placeholder="e.g. 40.00"
                       value={rate}
-                      onChange={(e) => setRate(e.target.value)}
+                      disabled={savedRate === null}
+                      aria-describedby="report-rate-status"
+                      onChange={(e) => {
+                        setRate(e.target.value);
+                        setRateStatus("idle");
+                      }}
                     />
                   </div>
                   <div className="ml-auto text-right">
@@ -416,16 +490,30 @@ export function TeacherPayReport({ teachers }: { teachers?: { id: string; name: 
                       {owed > 0 ? formatCurrency(owed) : "-"}
                     </p>
                   </div>
+                  <p id="report-rate-status" aria-live="polite" className="basis-full text-xs text-muted-foreground">
+                    {savedRate === null
+                      ? "Loading the saved rate…"
+                      : rateStatus === "saving"
+                        ? "Saving the rate…"
+                        : rateStatus === "error"
+                          ? "The rate could not be saved. Change it again to retry."
+                          : Number.isNaN(rateTextToCents(rate))
+                            ? "Enter a rate above zero."
+                            : rate !== savedRate.rate || (rate !== "" && basis !== savedRate.basis)
+                              ? "Saving the rate…"
+                              : savedRate.rate === ""
+                                ? `No rate is saved for ${report.teacher.name} yet. Enter one and it is kept until you change it.`
+                                : `${rateStatus === "saved" ? "Saved. " : ""}This is ${report.teacher.name}'s rate, and it stays until you change it here.`}
+                  </p>
                   <p className="flex-1 basis-64 text-xs text-muted-foreground">
                     {paid
                       ? "A payment is already recorded for this period."
                       : clashes.length > 0
                         ? "Change the dates before recording a payment: some of these days are already paid."
                         : notFinished
-                          ? "This period has not finished. End it today or earlier to record a payment."
-                          : "Enter a rate to work out the total. Nothing is paid through the app: record the payment once the check is written."}
-                  </p>
-                  <Button
+                          ? `A payment cannot be recorded yet: this period runs to ${dayLabel(end)}, which has not passed. End it today or earlier.`
+                          : "Nothing is paid through the app: record the payment once the check is written."}
+                  </p>                  <Button
                     size="sm"
                     disabled={paid !== null || clashes.length > 0 || notFinished}
                     onClick={() => setRecording(true)}

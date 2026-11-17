@@ -3,7 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 /** A tiny in-memory stand-in for the enrollment and classSession tables. */
 const store = vi.hoisted(() => {
   type Row = { id: string; studentId: string; sessionId: string; status: string; createdAt: Date };
-  const state = { rows: [] as Row[], capacity: new Map<string, number>(), seq: 0 };
+  const state = {
+    rows: [] as Row[],
+    capacity: new Map<string, number>(),
+    seq: 0,
+    /** Students who are the teacher of every class in these tests */
+    teachesOwn: new Set<string>(),
+  };
 
   const matches = (row: Row, where: Record<string, unknown>) =>
     Object.entries(where).every(([key, value]) => row[key as keyof Row] === value);
@@ -37,15 +43,16 @@ const store = vi.hoisted(() => {
   };
   const tx = {
     ...tables,
-    // SELECT ... FOR UPDATE on the session row
-    $queryRaw: async (_sql: TemplateStringsArray, id: string) => (state.capacity.has(id) ? [{ id }] : []),
+    // SELECT ... FOR UPDATE on the session row, which also says whether the student teaches it
+    $queryRaw: async (_sql: TemplateStringsArray, studentId: string, id: string) =>
+      state.capacity.has(id) ? [{ id, ownClass: state.teachesOwn.has(studentId) }] : [],
   };
   const prisma = { ...tables, $transaction: async (fn: (t: typeof tx) => unknown) => fn(tx) };
   return { state, prisma };
 });
 vi.mock("@/lib/prisma", () => ({ prisma: store.prisma }));
 
-import { cancelEnrollment, enrollStudent } from "@/lib/db/enrollment";
+import { cancelEnrollment, enrollStudent, OWN_CLASS_ERROR } from "@/lib/db/enrollment";
 
 const SESSION = "ses-1";
 const statusOf = (studentId: string) =>
@@ -58,6 +65,14 @@ beforeEach(() => {
 });
 
 describe("enrollStudent", () => {
+  it("never enrolls a teacher in a class they teach, even when forced", async () => {
+    store.state.teachesOwn.add("teacher-student");
+    const result = await enrollStudent({ studentId: "teacher-student", sessionId: SESSION, force: true });
+    expect(result).toEqual({ success: false, error: OWN_CLASS_ERROR });
+    expect(store.state.rows).toHaveLength(0);
+    store.state.teachesOwn.clear();
+  });
+
   it("enrolls while there is room", async () => {
     const result = await enrollStudent({ studentId: "a", sessionId: SESSION });
     expect(result).toMatchObject({ success: true, waitlist: false });

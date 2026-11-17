@@ -19,9 +19,13 @@ export const generateAllInvoicesSchema = z
     path: ["periodEnd"],
   });
 
-/** Send chosen draft invoices, or every draft when no ids are given. */
+/**
+ * Send chosen draft invoices, or every draft when no ids are given. With
+ * `email: false` they are only marked as sent (a studio that hands out paper).
+ */
 export const sendInvoicesSchema = z.object({
   ids: z.array(z.string().min(1)).min(1).max(500).optional(),
+  email: z.boolean().default(true),
 });
 
 /**

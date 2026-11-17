@@ -7,6 +7,7 @@ import { Check, Copy, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AdminTeamCard } from "@/components/admin-team-card";
+import { TeacherDiscountCard } from "@/components/teacher-discount-card";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -275,6 +276,8 @@ export default function AdminSettingsPage() {
           </form>
         </CardContent>
       </Card>
+
+      <TeacherDiscountCard />
 
       <AdminTeamCard />
 

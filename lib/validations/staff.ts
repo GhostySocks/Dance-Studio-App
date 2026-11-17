@@ -44,3 +44,19 @@ export const removeTeacherSchema = z.object({
 export type TeacherProfileFormData = z.infer<typeof teacherProfileFormSchema>;
 export type NewTeacherFormData = z.infer<typeof newTeacherSchema>;
 export type NewAdminFormData = z.infer<typeof newAdminSchema>;
+
+/**
+ * The studio's discount for teachers on classes they take. `value` is a whole
+ * percentage for PERCENT and an amount in cents for FIXED; NONE turns it off.
+ */
+export const teacherDiscountSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("NONE") }),
+  z.object({
+    type: z.literal("PERCENT"),
+    value: z.number().int("Use a whole percentage").min(1, "Use 1 to 100").max(100, "Use 1 to 100"),
+  }),
+  z.object({
+    type: z.literal("FIXED"),
+    value: z.number().int().min(1, "Enter an amount above zero").max(10_000_000, "That amount is too large"),
+  }),
+]);

@@ -16,6 +16,7 @@ import {
   getInvoiceEmailContext,
   getStudioInfo,
 } from "@/lib/db/recipients";
+import { buildInvoiceAttachment, type EmailAttachment } from "@/lib/invoice-attachment";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 
 let client: Resend | null | undefined;
@@ -30,6 +31,11 @@ function getResend(): Resend | null {
   return client;
 }
 
+/** Whether emails can be sent at all (a provider key and a from address are set). */
+function emailConfigured(): boolean {
+  return getResend() !== null && !!process.env.EMAIL_FROM;
+}
+
 /**
  * Sends one email. Never throws: email is a side effect and must not fail the
  * operation (enrollment, payment, webhook) that triggered it.
@@ -39,12 +45,14 @@ export async function sendEmail({
   subject,
   react,
   replyTo,
+  attachments,
 }: {
   to: string[];
   subject: string;
   react: ReactElement;
   /** Where replies should go, when not back to the studio. */
   replyTo?: string;
+  attachments?: EmailAttachment[];
 }): Promise<{ sent: boolean }> {
   if (to.length === 0) return { sent: false };
 
@@ -53,7 +61,7 @@ export async function sendEmail({
   if (!resend || !from) return { sent: false };
 
   try {
-    const { error } = await resend.emails.send({ from, to, subject, react, replyTo });
+    const { error } = await resend.emails.send({ from, to, subject, react, replyTo, attachments });
     if (error) {
       console.error(`Email "${subject}" failed:`, error.message);
       return { sent: false };
@@ -111,7 +119,14 @@ const invoiceSubjects: Record<InvoiceEmailProps["kind"], string> = {
   failed: "Payment failed — action needed",
 };
 
-/** Emails the payer(s) of an invoice: new invoice, receipt, or failed payment. */
+/** Which invoice emails carry the invoice as a PDF. */
+const INVOICE_KINDS_WITH_PDF: InvoiceEmailProps["kind"][] = ["sent", "receipt"];
+
+/**
+ * Emails the payer(s) of an invoice: new invoice, receipt, or failed payment.
+ * A new invoice and a receipt have the invoice attached as a PDF; if the PDF
+ * cannot be built the email still goes out without it.
+ */
 export async function sendInvoiceEmail(invoiceId: string, kind: InvoiceEmailProps["kind"]) {
   try {
     const [ctx, studio] = await Promise.all([
@@ -121,9 +136,18 @@ export async function sendInvoiceEmail(invoiceId: string, kind: InvoiceEmailProp
     if (!ctx) return { sent: false };
 
     const { invoice } = ctx;
+    let attachments: EmailAttachment[] | undefined;
+    if (INVOICE_KINDS_WITH_PDF.includes(kind) && ctx.recipients.length > 0 && emailConfigured()) {
+      try {
+        attachments = [await buildInvoiceAttachment(invoice, studio)];
+      } catch (error) {
+        console.error(`Invoice PDF for ${invoice.id} could not be built:`, error);
+      }
+    }
     return await sendEmail({
       to: ctx.recipients,
       subject: `${invoiceSubjects[kind]} — ${studio.name}`,
+      attachments,
       react: InvoiceEmail({
         studioName: studio.name,
         kind,
@@ -137,6 +161,7 @@ export async function sendInvoiceEmail(invoiceId: string, kind: InvoiceEmailProp
           amount: formatCurrency(l.amountCents),
         })),
         payUrl: billingUrl(),
+        pdfAttached: attachments !== undefined,
       }),
     });
   } catch (error) {

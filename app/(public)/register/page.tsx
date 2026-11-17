@@ -10,7 +10,7 @@ import { authOptions } from "@/lib/auth";
 import { getPublicSession, getPublicStudio, type PublicSession } from "@/lib/db/public";
 import { getEnrollableStudents, getExistingEnrollments } from "@/lib/db/registration";
 import { getExistingRegistrations, getRegistrationOptions } from "@/lib/db/registrations";
-import { hasRole } from "@/lib/permissions";
+import { isPortalUser } from "@/lib/permissions";
 import { portalHome } from "@/lib/portal";
 import { PLAN_HINTS, PLAN_LABELS, PLAN_UNITS, isTermPlan, type TermPlan } from "@/lib/registration-billing";
 import { formatDayHeading, formatShortDay, formatTimeRange, spotsLabel } from "@/lib/schedule-format";
@@ -161,7 +161,7 @@ export default async function RegisterPage({
         termChoice={target?.kind === "term" ? target : undefined}
       />
     );
-  } else if (!hasRole(auth, "PARENT", "STUDENT")) {
+  } else if (!isPortalUser(auth)) {
     body = (
       <div className="space-y-4">
         <p className="text-muted-foreground">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -51,6 +52,8 @@ interface Teacher {
     email: string;
     image: string | null;
     role: string;
+    /** Their own student record, when they also take classes */
+    student: { id: string } | null;
   };
   sessions: Session[];
   /** Classes they are still due to teach. */
@@ -71,6 +74,32 @@ export default function AdminTeacherDetailPage() {
   const [isRemoving, setIsRemoving] = useState(false);
   const [others, setOthers] = useState<{ id: string; name: string }[]>([]);
   const [reassignTo, setReassignTo] = useState("");
+  const [addingStudent, setAddingStudent] = useState(false);
+  const [savingStudent, setSavingStudent] = useState(false);
+
+  /** Gives the teacher their own student record so they can take classes too. */
+  async function addAsStudent() {
+    if (!teacher) return;
+    setSavingStudent(true);
+    try {
+      const res = await fetch(`/api/teachers/${teacher.id}/student`, { method: "POST" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        toast.error(typeof json?.error === "string" ? json.error : "Could not set them up to take classes");
+        return;
+      }
+      const studentId: string = json.data.studentId;
+      setTeacher((prev) => (prev ? { ...prev, user: { ...prev.user, student: { id: studentId } } } : prev));
+      setAddingStudent(false);
+      toast.success(`${teacher.user.name ?? "They"} can now take classes.`, {
+        description: "They sign in the same way and will see Classes I take in their menu.",
+      });
+    } catch {
+      toast.error("Could not set them up to take classes. Please try again.");
+    } finally {
+      setSavingStudent(false);
+    }
+  }
 
   async function openRemove() {
     setReassignTo("");
@@ -302,6 +331,30 @@ export default function AdminTeacherDetailPage() {
       </Modal>
       <InviteLinkNotice result={invite} onClose={() => setInvite(null)} />
 
+      <Modal
+        open={addingStudent}
+        onClose={() => setAddingStudent(false)}
+        title={`Let ${teacher.user.name ?? "this teacher"} take classes?`}
+        description="They get their own student record on the same sign-in, and a Classes I take section in their menu to sign up for classes, see their attendance and pay any invoices. Classes they take never count on their pay report."
+        className="max-w-lg"
+      >
+        <p className="text-sm text-muted-foreground">
+          What they pay follows the studio&apos;s teacher discount, which is set in{" "}
+          <Link href="/admin/settings" className="font-medium text-primary hover:underline">
+            Settings
+          </Link>
+          .
+        </p>
+        <div className="mt-4 flex justify-end gap-2 border-t pt-4">
+          <Button variant="outline" onClick={() => setAddingStudent(false)} disabled={savingStudent}>
+            Cancel
+          </Button>
+          <Button onClick={addAsStudent} disabled={savingStudent}>
+            {savingStudent ? "Saving…" : "Let them take classes"}
+          </Button>
+        </div>
+      </Modal>
+
       {/* Teacher Info Card */}
       <Card>
         <CardHeader>
@@ -352,6 +405,32 @@ export default function AdminTeacherDetailPage() {
               <div className="sm:col-span-2">
                 <p className="text-sm font-medium text-muted-foreground">Bio</p>
                 <p className="whitespace-pre-wrap">{teacher.bio ?? "—"}</p>
+              </div>
+              <div className="sm:col-span-2">
+                <p className="text-sm font-medium text-muted-foreground">Takes classes</p>
+                {teacher.user.student ? (
+                  <p>
+                    Yes.{" "}
+                    <Link
+                      href={`/admin/students/${teacher.user.student.id}`}
+                      className="font-medium text-primary hover:underline"
+                    >
+                      Open their student record
+                    </Link>{" "}
+                    to see or change their classes.
+                  </p>
+                ) : (
+                  <div className="mt-1 flex flex-wrap items-center gap-3">
+                    <p className="text-muted-foreground">No</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setAddingStudent(true)}
+                    >
+                      Also takes classes
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           ) : (

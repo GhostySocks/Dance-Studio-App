@@ -165,6 +165,10 @@ model StudioProfile {
   website         String?
   timezone        String   @default("America/New_York")
   billingCycleDay Int      @default(1)
+  /// Discount for teachers on the classes they take: "PERCENT" (value 1-100) or
+  /// "FIXED" (value in cents, off each invoice). Both null = no discount.
+  teacherDiscountType  String?
+  teacherDiscountValue Int?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -245,6 +249,10 @@ model Teacher {
   /// Class dates this teacher normally takes that a substitute taught instead
   coveredSessions ClassSession[] @relation("SubstituteFor")
   payments    TeacherPayment[]
+  /// The rate this teacher is paid: "PER_CLASS" or "PER_HOUR" and an amount in
+  /// cents. Both are set together, or both are null when no rate has been set.
+  payBasis     String?
+  payRateCents Int?
   /// Set when someone who keeps their account (an administrator who also taught)
   /// stops being a teacher. A teacher-only account is removed by disabling the user.
   removedAt   DateTime?

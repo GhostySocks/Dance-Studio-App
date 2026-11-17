@@ -304,3 +304,55 @@ export async function removeAdmin(userId: string, actorId: string): Promise<Remo
   clearAccountStatus(userId);
   return teaches ? "now-teacher" : "removed";
 }
+
+/** "Maria Elena Garcia" -> first "Maria Elena", last "Garcia" (a single name is the first name). */
+export function splitName(name: string): { firstName: string; lastName: string } {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return { firstName: parts[0] ?? "", lastName: "" };
+  return { firstName: parts.slice(0, -1).join(" "), lastName: parts[parts.length - 1] };
+}
+
+/**
+ * Lets a teacher (or an administrator who teaches) take classes: gives their
+ * account its own student record, so the same sign-in also has the student pages.
+ * What they pay follows the studio's teacher discount (Settings). Asking again returns the record they already have and adds nothing.
+ * Returns null if the teacher is not a current teacher.
+ */
+export async function addStudentProfile(teacherId: string, actorId: string) {
+  const result = await prisma.$transaction(async (tx) => {
+    const teacher = await tx.teacher.findFirst({
+      where: { id: teacherId, removedAt: null, user: { disabledAt: null } },
+      select: {
+        id: true,
+        phone: true,
+        user: { select: { id: true, name: true, email: true, student: { select: { id: true } } } },
+      },
+    });
+    if (!teacher) return null;
+    if (teacher.user.student) {
+      return { userId: teacher.user.id, studentId: teacher.user.student.id, created: false };
+    }
+
+    const student = await tx.student.create({
+      data: {
+        ...splitName(teacher.user.name ?? teacher.user.email),
+        email: teacher.user.email,
+        phone: teacher.phone,
+        userId: teacher.user.id,
+      },
+      select: { id: true },
+    });
+    await tx.auditLog.create({
+      data: {
+        actorId,
+        action: "STAFF_STUDENT_PROFILE_ADDED",
+        entityType: "Student",
+        entityId: student.id,
+        meta: { teacherId, userId: teacher.user.id },
+      },
+    });
+    return { userId: teacher.user.id, studentId: student.id, created: true };
+  });
+  if (result) clearAccountStatus(result.userId);
+  return result;
+}

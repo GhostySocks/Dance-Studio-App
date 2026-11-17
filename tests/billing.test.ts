@@ -6,6 +6,7 @@ const db = vi.hoisted(() => ({
   scholarship: { findMany: vi.fn() },
   registration: { findMany: vi.fn() },
   studioProfile: { findFirst: vi.fn() },
+  student: { findFirst: vi.fn() },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
@@ -67,9 +68,17 @@ function setup({
   rules = [] as ReturnType<typeof rule>[],
   scholarships = [] as ReturnType<typeof scholarship>[],
   registrations = [] as ReturnType<typeof registration>[],
+  /** The studio's teacher discount, and whether the student being billed is a teacher */
+  teacherDiscount = null as { type: string; value: number } | null,
+  isTeacher = false,
 }) {
   db.registration.findMany.mockResolvedValue(registrations);
-  db.studioProfile.findFirst.mockResolvedValue({ timezone: "America/New_York" });
+  db.studioProfile.findFirst.mockResolvedValue({
+    timezone: "America/New_York",
+    teacherDiscountType: teacherDiscount?.type ?? null,
+    teacherDiscountValue: teacherDiscount?.value ?? null,
+  });
+  db.student.findFirst.mockResolvedValue(isTeacher ? { id: "stu-1" } : null);
   db.enrollment.findMany.mockResolvedValue(enrollments);
   db.pricingRule.findMany.mockResolvedValue(rules);
   db.scholarship.findMany.mockResolvedValue(scholarships);
@@ -423,6 +432,62 @@ describe("generateStudentInvoice", () => {
     const invoice = await student();
     expect(invoice.totalCents).toBe(1000);
     expect(sum(invoice.lineItems)).toBe(1000);
+  });
+
+  describe("a teacher who takes classes", () => {
+    it("gets the studio's percentage discount", async () => {
+      setup({ enrollments: [enrollment("A", 3000)], teacherDiscount: { type: "PERCENT", value: 50 }, isTeacher: true });
+      const invoice = await student();
+      expect(invoice.totalCents).toBe(1500);
+      expect(invoice.lineItems.at(-1)).toEqual({
+        description: "Teacher discount (50%)",
+        amountCents: -1500,
+        type: "DISCOUNT",
+      });
+    });
+
+    it("takes classes free at 100%", async () => {
+      setup({
+        enrollments: [enrollment("A", 3000), enrollment("B", 2000)],
+        teacherDiscount: { type: "PERCENT", value: 100 },
+        isTeacher: true,
+      });
+      const invoice = await student();
+      expect(invoice.totalCents).toBe(0);
+      expect(sum(invoice.lineItems)).toBe(0);
+    });
+
+    it("gets a dollar amount off the invoice, never more than the invoice", async () => {
+      setup({ enrollments: [enrollment("A", 3000)], teacherDiscount: { type: "FIXED", value: 1000 }, isTeacher: true });
+      expect((await student()).totalCents).toBe(2000);
+
+      setup({ enrollments: [enrollment("A", 3000)], teacherDiscount: { type: "FIXED", value: 9900 }, isTeacher: true });
+      const invoice = await student();
+      expect(invoice.totalCents).toBe(0);
+      expect(sum(invoice.lineItems)).toBe(0);
+    });
+
+    it("has the discount applied before their scholarships", async () => {
+      setup({
+        enrollments: [enrollment("A", 4000)],
+        scholarships: [scholarship("FIXED", 500)],
+        teacherDiscount: { type: "PERCENT", value: 50 },
+        isTeacher: true,
+      });
+      expect((await student()).totalCents).toBe(1500);
+    });
+  });
+
+  it("gives no teacher discount to a student who is not a teacher", async () => {
+    setup({ enrollments: [enrollment("A", 3000)], teacherDiscount: { type: "PERCENT", value: 50 } });
+    const invoice = await student();
+    expect(invoice.totalCents).toBe(3000);
+    expect(invoice.lineItems.every((line) => line.type === "TUITION")).toBe(true);
+  });
+
+  it("gives a teacher no discount when the studio has none set", async () => {
+    setup({ enrollments: [enrollment("A", 3000)], isTeacher: true });
+    expect((await student()).totalCents).toBe(3000);
   });
 
   it("returns zero when there is nothing to bill", async () => {

@@ -6,7 +6,7 @@ import { enrollStudent } from "@/lib/db/enrollment";
 import { getPublicSession } from "@/lib/db/public";
 import { getEnrollableStudents } from "@/lib/db/registration";
 import { sendEnrollmentConfirmation } from "@/lib/email";
-import { hasRole } from "@/lib/permissions";
+import { isPortalUser } from "@/lib/permissions";
 import { portalEnrollSchema } from "@/lib/validations/registration";
 
 /** Self-service enrollment: a parent enrolls their children, or an adult student themself. */
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    if (!hasRole(session, "PARENT", "STUDENT")) {
+    if (!isPortalUser(session)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

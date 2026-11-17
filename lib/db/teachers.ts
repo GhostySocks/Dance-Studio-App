@@ -61,7 +61,17 @@ export async function getTeacherById(id: string) {
   return prisma.teacher.findFirst({
     where: { id, ...CURRENT_TEACHER },
     include: {
-      user: { select: { id: true, name: true, email: true, image: true, role: true } },
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+          role: true,
+          // Their own student record, when they also take classes
+          student: { select: { id: true } },
+        },
+      },
       sessions: {
         include: {
           template: { select: { name: true, danceStyle: true } },

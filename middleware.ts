@@ -24,7 +24,12 @@ export default withAuth(
       return NextResponse.redirect(new URL("/unauthorized", req.url));
     }
 
-    if (pathname.startsWith("/student") && !["SUPER_ADMIN", "ADMIN", "STUDENT"].includes(role)) {
+    // Staff who also take classes have their own student record and use the student pages
+    if (
+      pathname.startsWith("/student") &&
+      !["SUPER_ADMIN", "ADMIN", "STUDENT"].includes(role) &&
+      token.takesClasses !== true
+    ) {
       return NextResponse.redirect(new URL("/unauthorized", req.url));
     }
 

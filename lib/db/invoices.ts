@@ -247,7 +247,16 @@ export async function generateAllInvoices({
  * `ids` is left out. Invoices that are not drafts are left alone and counted as
  * skipped, so a paid or void invoice can never be "sent" again from a stale list.
  */
-export async function markDraftInvoicesSent({ ids, actorId }: { ids?: string[]; actorId: string }) {
+export async function markDraftInvoicesSent({
+  ids,
+  actorId,
+  email = true,
+}: {
+  ids?: string[];
+  actorId: string;
+  /** Whether the caller goes on to email them; recorded in the audit trail */
+  email?: boolean;
+}) {
   const drafts = await prisma.invoice.findMany({
     where: { status: "DRAFT", ...(ids ? { id: { in: ids } } : {}) },
     select: { id: true },
@@ -267,7 +276,7 @@ export async function markDraftInvoicesSent({ ids, actorId }: { ids?: string[]; 
         action: "INVOICES_SENT",
         entityType: "Invoice",
         entityId: "bulk",
-        meta: { count: sentIds.length, skipped, all: !ids },
+        meta: { count: sentIds.length, skipped, all: !ids, email },
       },
     }),
   ]);

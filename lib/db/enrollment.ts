@@ -73,6 +73,9 @@ export async function getEnrollmentById(id: string) {
   });
 }
 
+/** Shown when someone would be enrolled in a class they teach. */
+export const OWN_CLASS_ERROR = "They teach this class, so they cannot also take it";
+
 export async function enrollStudent({
   studentId,
   sessionId,
@@ -92,8 +95,16 @@ export async function enrollStudent({
 }> {
   // Lock the session row so two people cannot take the last spot at the same time
   return prisma.$transaction(async (tx) => {
-    const locked = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "ClassSession" WHERE id = ${sessionId} FOR UPDATE`;
+    // The same query says whether the student is this class's own teacher (staff can take classes)
+    const locked = await tx.$queryRaw<{ id: string; ownClass: boolean }[]>`
+      SELECT cs.id,
+        EXISTS (
+          SELECT 1 FROM "Teacher" t JOIN "Student" s ON s."userId" = t."userId"
+          WHERE t.id = cs."teacherId" AND s.id = ${studentId}
+        ) AS "ownClass"
+      FROM "ClassSession" cs WHERE cs.id = ${sessionId} FOR UPDATE OF cs`;
     if (locked.length === 0) return { success: false, error: "Session not found" };
+    if (locked[0].ownClass) return { success: false, error: OWN_CLASS_ERROR };
 
     // Check if already enrolled
     const existing = await tx.enrollment.findUnique({

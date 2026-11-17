@@ -17,6 +17,8 @@ export interface InvoiceEmailProps {
   total: string;
   lines: InvoiceEmailLine[];
   payUrl: string;
+  /** The invoice is attached to this email as a PDF */
+  pdfAttached?: boolean;
 }
 
 const copy = {
@@ -50,6 +52,7 @@ export default function InvoiceEmail({
   total,
   lines,
   payUrl,
+  pdfAttached = false,
 }: InvoiceEmailProps) {
   const c = copy[kind];
   return (
@@ -80,6 +83,11 @@ export default function InvoiceEmail({
           {c.cta}
         </Button>
       </Text>
+      {pdfAttached && (
+        <Text style={{ ...styles.muted, margin: "16px 0 0" }}>
+          A copy of this invoice is attached as a PDF for your records.
+        </Text>
+      )}
     </EmailLayout>
   );
 }

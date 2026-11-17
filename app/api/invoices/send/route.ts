@@ -9,7 +9,11 @@ import { sendInvoicesSchema } from "@/lib/validations/invoice";
 /** Emails are sent a few at a time so a large batch does not swamp the provider or the database pool. */
 const EMAIL_CONCURRENCY = 3;
 
-/** Sends the chosen draft invoices, or every draft invoice when no ids are given. */
+/**
+ * Sends the chosen draft invoices, or every draft invoice when no ids are given.
+ * They are emailed unless the request says `email: false`, which only marks
+ * them as sent.
+ */
 export async function POST(req: NextRequest) {
   try {
     const { session, response } = await requireAdmin();
@@ -23,12 +27,18 @@ export async function POST(req: NextRequest) {
     const { sentIds, skipped } = await markDraftInvoicesSent({
       ids: parsed.data.ids,
       actorId: session.user.id,
+      email: parsed.data.email,
     });
 
-    const emails = await mapWithLimit(sentIds, EMAIL_CONCURRENCY, (id) => sendInvoiceEmail(id, "sent"));
-    const emailed = emails.filter((e) => e.sent).length;
+    let emailed = 0;
+    if (parsed.data.email) {
+      const emails = await mapWithLimit(sentIds, EMAIL_CONCURRENCY, (id) => sendInvoiceEmail(id, "sent"));
+      emailed = emails.filter((e) => e.sent).length;
+    }
 
-    return NextResponse.json({ data: { sent: sentIds.length, emailed, skipped } });
+    return NextResponse.json({
+      data: { sent: sentIds.length, emailed, skipped, emailRequested: parsed.data.email },
+    });
   } catch (error) {
     console.error("POST /api/invoices/send error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

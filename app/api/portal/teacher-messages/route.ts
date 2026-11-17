@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getTeacherMessageContext, recordTeacherMessage } from "@/lib/db/teacher-messages";
 import { sendTeacherMessage } from "@/lib/email";
-import { hasRole } from "@/lib/permissions";
+import { isPortalUser } from "@/lib/permissions";
 import { rateLimit } from "@/lib/rate-limit";
 import { teacherMessageSchema } from "@/lib/validations/teacher-message";
 
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    if (!hasRole(session, "PARENT", "STUDENT")) {
+    if (!isPortalUser(session)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

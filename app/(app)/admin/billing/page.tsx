@@ -127,6 +127,8 @@ export default function BillingPage() {
   const [studio, setStudio] = useState<{ name?: string; timezone?: string }>({});
   /** What the send confirmation is about to send; null when it is closed. */
   const [sendPlan, setSendPlan] = useState<{ ids?: string[]; count: number } | null>(null);
+  /** The confirmation asks about email first; after "No" it asks whether to mark them sent anyway. */
+  const [sendStep, setSendStep] = useState<"email" | "mark">("email");
   const [isSending, setIsSending] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -333,6 +335,12 @@ export default function BillingPage() {
   const selectedDrafts = selectedRows.filter((invoice) => invoice.status === "DRAFT");
   const pageTicked = invoices.filter((invoice) => selected.has(invoice.id)).length;
 
+  /** Opens the send confirmation, always starting at the email question. */
+  function openSendPlan(plan: { ids?: string[]; count: number }) {
+    setSendStep("email");
+    setSendPlan(plan);
+  }
+
   async function askSendAll() {
     try {
       const res = await fetch("/api/invoices?status=DRAFT&perPage=1");
@@ -342,7 +350,7 @@ export default function BillingPage() {
         toast.info("There are no draft invoices to send");
         return;
       }
-      setSendPlan({ count });
+      openSendPlan({ count });
     } catch {
       toast.error("Could not check for draft invoices");
     }
@@ -353,34 +361,41 @@ export default function BillingPage() {
       toast.info("None of the selected invoices are drafts, so there is nothing to send");
       return;
     }
-    setSendPlan({ ids: selectedDrafts.map((invoice) => invoice.id), count: selectedDrafts.length });
+    openSendPlan({ ids: selectedDrafts.map((invoice) => invoice.id), count: selectedDrafts.length });
   }
 
-  async function onSend() {
+  /** Marks the planned invoices as sent, emailing them or not. */
+  async function onSend(email: boolean) {
     if (!sendPlan) return;
     setIsSending(true);
     try {
       const res = await fetch("/api/invoices/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(sendPlan.ids ? { ids: sendPlan.ids } : {}),
+        body: JSON.stringify(sendPlan.ids ? { ids: sendPlan.ids, email } : { email }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Sending failed");
       const { sent, emailed } = json.data as { sent: number; emailed: number; skipped: number };
       if (sent === 0) {
         toast.info("No draft invoices were left to send");
-      } else {
+      } else if (!email) {
         toast.success(`${plural(sent, "invoice", "invoices")} marked as sent`, {
+          description: "No emails were sent.",
+        });
+      } else {
+        toast.success(`${plural(sent, "invoice", "invoices")} sent`, {
           description:
             emailed < sent
               ? `${plural(sent - emailed, "was", "were")} not emailed: no email address on file, or email is not set up yet.`
               : undefined,
         });
       }
+      const sentIds = sendPlan.ids;
       setSendPlan(null);
       setSelected(new Map());
       fetchInvoices();
+      if (detailInvoice && sentIds?.includes(detailInvoice.id)) setDetailInvoice(null);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Sending failed");
     } finally {
@@ -506,7 +521,7 @@ export default function BillingPage() {
                   View details
                 </DropdownMenuItem>
                 {inv.status === "DRAFT" && (
-                  <DropdownMenuItem onClick={() => updateStatus(inv.id, "SENT")}>
+                  <DropdownMenuItem onClick={() => openSendPlan({ ids: [inv.id], count: 1 })}>
                     <Send aria-hidden />
                     Send
                   </DropdownMenuItem>
@@ -654,18 +669,40 @@ export default function BillingPage() {
       <Modal
         open={!!sendPlan}
         onClose={() => setSendPlan(null)}
-        title={sendPlan ? `Send ${plural(sendPlan.count, "draft invoice", "draft invoices")}?` : "Send invoices?"}
-        description="Each one is emailed to the family or student and appears in their portal to pay. A sent invoice cannot go back to draft, though it can still be voided."
+        title={
+          sendStep === "email"
+            ? `Send ${sendPlan?.count === 1 ? "invoice" : `${sendPlan?.count ?? ""} invoices`} via email?`
+            : `Mark ${sendPlan?.count === 1 ? "the invoice" : `all ${sendPlan?.count ?? ""} invoices`} as sent anyway?`
+        }
+        description={
+          sendStep === "email"
+            ? `${sendPlan?.count === 1 ? "It is" : "Each one is"} emailed to the family or student with the invoice attached as a PDF, and appears in their portal to pay. A sent invoice cannot go back to draft, though it can still be voided.`
+            : `Nothing will be emailed. ${sendPlan?.count === 1 ? "The invoice is" : "The invoices are"} marked as sent and ${sendPlan?.count === 1 ? "appears" : "appear"} in the portal to pay, for example when you hand out paper copies. Choose No to leave ${sendPlan?.count === 1 ? "it as a draft" : "them as drafts"}.`
+        }
         className="max-w-md"
       >
         <div className="flex justify-end gap-2 border-t pt-4">
-          <Button variant="outline" onClick={() => setSendPlan(null)} disabled={isSending}>
-            Cancel
-          </Button>
-          <Button onClick={onSend} disabled={isSending}>
-            {isSending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
-            Send
-          </Button>
+          {sendStep === "email" ? (
+            <>
+              <Button variant="outline" onClick={() => setSendStep("mark")} disabled={isSending}>
+                No
+              </Button>
+              <Button onClick={() => onSend(true)} disabled={isSending}>
+                {isSending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
+                Yes, send
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => setSendPlan(null)} disabled={isSending}>
+                No
+              </Button>
+              <Button onClick={() => onSend(false)} disabled={isSending}>
+                {isSending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
+                Yes, mark as sent
+              </Button>
+            </>
+          )}
         </div>
       </Modal>
 
@@ -873,7 +910,7 @@ export default function BillingPage() {
               </div>
               <div className="flex gap-2">
                 {detailInvoice.status === "DRAFT" && (
-                  <Button size="sm" onClick={() => updateStatus(detailInvoice.id, "SENT")}>
+                  <Button size="sm" onClick={() => openSendPlan({ ids: [detailInvoice.id], count: 1 })}>
                     <Send className="h-4 w-4 mr-2" />
                     Send
                   </Button>

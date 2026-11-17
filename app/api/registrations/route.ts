@@ -7,7 +7,7 @@ import { getEnrollableStudents } from "@/lib/db/registration";
 import { createRegistration, getRegistrations } from "@/lib/db/registrations";
 import { getStudentNames } from "@/lib/db/students";
 import { sendRegistrationConfirmation } from "@/lib/email";
-import { hasRole, isAdmin } from "@/lib/permissions";
+import { isAdmin, isPortalUser } from "@/lib/permissions";
 import { createRegistrationSchema } from "@/lib/validations/term";
 
 export const dynamic = "force-dynamic";
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const admin = isAdmin(session);
-    if (!admin && !hasRole(session, "PARENT", "STUDENT")) {
+    if (!admin && !isPortalUser(session)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

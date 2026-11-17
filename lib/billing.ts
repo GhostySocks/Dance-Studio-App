@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { teacherDiscountCents, teacherDiscountLabel, toTeacherDiscount, type TeacherDiscount } from "@/lib/teacher-discount";
 import type { Prisma } from "@prisma/client";
 
 import { getRegistrationsForBilling } from "@/lib/db/registrations";
@@ -297,7 +298,24 @@ export async function generateFamilyInvoice({
 }
 
 /**
- * Generate invoice for a single student (no family group)
+ * The studio's teacher discount, if this student is a current teacher taking
+ * classes on their own account (their student record is linked to their sign-in).
+ */
+async function getTeacherDiscountFor(studentId: string): Promise<TeacherDiscount | null> {
+  const [isTeacher, studio] = await Promise.all([
+    prisma.student.findFirst({
+      where: { id: studentId, user: { disabledAt: null, teacher: { removedAt: null } } },
+      select: { id: true },
+    }),
+    prisma.studioProfile.findFirst({ select: { teacherDiscountType: true, teacherDiscountValue: true } }),
+  ]);
+  if (!isTeacher) return null;
+  return toTeacherDiscount(studio?.teacherDiscountType, studio?.teacherDiscountValue);
+}
+
+/**
+ * Generate invoice for a single student (no family group). A teacher who takes
+ * classes is billed here, with the studio's teacher discount.
  */
 export async function generateStudentInvoice({
   studentId,
@@ -320,14 +338,25 @@ export async function generateStudentInvoice({
     totalCents += unit.priceCents;
   }
 
-  // Apply student scholarships
-  const scholarships = await prisma.scholarship.findMany({
-    where: {
-      studentId,
-      startDate: { lte: periodEnd },
-      OR: [{ endDate: null }, { endDate: { gte: periodStart } }],
-    },
-  });
+  const [scholarships, teacherDiscount] = await Promise.all([
+    prisma.scholarship.findMany({
+      where: {
+        studentId,
+        startDate: { lte: periodEnd },
+        OR: [{ endDate: null }, { endDate: { gte: periodStart } }],
+      },
+    }),
+    getTeacherDiscountFor(studentId),
+  ]);
+
+  // A teacher taking classes gets the studio's teacher discount, before any scholarship
+  if (teacherDiscount) {
+    const off = teacherDiscountCents(teacherDiscount, totalCents);
+    if (off > 0) {
+      lineItems.push({ description: teacherDiscountLabel(teacherDiscount), amountCents: -off, type: "DISCOUNT" });
+      totalCents -= off;
+    }
+  }
 
   totalCents = applyScholarships(scholarships, lineItems, totalCents);
 

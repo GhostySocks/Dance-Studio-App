@@ -64,7 +64,9 @@ export const authOptions: NextAuthOptions = {
         // Signing in: authorize() has just checked the account
         token.id = user.id;
         token.role = (user as { role: UserRole }).role;
-        token.teaches = (await getAccountStatus(user.id))?.teaches ?? false;
+        const signedIn = await getAccountStatus(user.id);
+        token.teaches = signedIn?.teaches ?? false;
+        token.takesClasses = signedIn?.takesClasses ?? false;
         return token;
       }
 
@@ -76,6 +78,7 @@ export const authOptions: NextAuthOptions = {
       }
       token.role = status.role;
       token.teaches = status.teaches;
+      token.takesClasses = status.takesClasses;
       return token;
     },
     async session({ session, token }) {
@@ -83,6 +86,7 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id as string;
         session.user.role = token.role as UserRole;
         session.user.teaches = token.teaches === true;
+        session.user.takesClasses = token.takesClasses === true;
       }
       return session;
     },

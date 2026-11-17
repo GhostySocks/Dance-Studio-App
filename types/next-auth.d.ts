@@ -13,6 +13,8 @@ declare module "next-auth" {
       role: UserRole;
       /** Has a teacher profile (a teacher, or an administrator who also teaches) */
       teaches: boolean;
+      /** Has their own student record (an adult student, or staff who also take classes) */
+      takesClasses: boolean;
       image?: string | null;
     };
   }
@@ -23,5 +25,6 @@ declare module "next-auth/jwt" {
     id: string;
     role: UserRole;
     teaches?: boolean;
+    takesClasses?: boolean;
   }
 }

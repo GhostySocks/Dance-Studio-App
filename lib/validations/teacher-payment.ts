@@ -20,3 +20,16 @@ export const teacherPaymentSchema = z
   });
 
 export type TeacherPaymentInput = z.infer<typeof teacherPaymentSchema>;
+
+/** The pay rate kept for a teacher. A null rate clears it. */
+export const teacherPayRateSchema = z.object({
+  basis: z.enum(["PER_CLASS", "PER_HOUR"]),
+  rateCents: z
+    .number()
+    .int("Enter the rate in dollars and cents")
+    .positive("Enter a rate above zero")
+    .max(10_000_000, "That rate is too large")
+    .nullable(),
+});
+
+export type TeacherPayRateInput = z.infer<typeof teacherPayRateSchema>;

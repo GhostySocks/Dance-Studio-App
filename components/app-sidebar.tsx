@@ -84,6 +84,16 @@ const myTeachingNav: NavGroup = {
   ],
 };
 
+/** Shown to staff who also take classes (they have their own student record) */
+const classesITakeNav: NavGroup = {
+  label: "Classes I take",
+  items: [
+    { title: "My Schedule", href: "/student/schedule", icon: Calendar },
+    { title: "My Attendance", href: "/student/attendance", icon: UserCheck },
+    { title: "My Billing", href: "/student/billing", icon: Receipt },
+  ],
+};
+
 const teacherNav: NavItem[] = [
   { title: "Dashboard", href: "/teacher/dashboard", icon: LayoutDashboard },
   { title: "My Classes", href: "/teacher/classes", icon: BookOpen },
@@ -106,17 +116,27 @@ const studentNav: NavItem[] = [
   { title: "Billing", href: "/student/billing", icon: Receipt },
 ];
 
-function getNavForRole(role: string, teaches: boolean): { label: string; groups: NavGroup[] } {
+function getNavForRole(
+  role: string,
+  teaches: boolean,
+  takesClasses: boolean
+): { label: string; groups: NavGroup[] } {
+  const own = [...(teaches ? [myTeachingNav] : []), ...(takesClasses ? [classesITakeNav] : [])];
   switch (role) {
     case "SUPER_ADMIN":
     case "ADMIN":
       // Dashboard first, then their own teaching, then the rest of the studio
       return {
         label: "Administration",
-        groups: teaches ? [adminNav[0], myTeachingNav, ...adminNav.slice(1)] : adminNav,
+        groups: [adminNav[0], ...own, ...adminNav.slice(1)],
       };
     case "TEACHER":
-      return { label: "Teacher Portal", groups: [{ items: teacherNav }] };
+      return {
+        label: "Teacher Portal",
+        groups: takesClasses
+          ? [{ items: [teacherNav[0]] }, { label: "My teaching", items: teacherNav.slice(1) }, classesITakeNav]
+          : [{ items: teacherNav }],
+      };
     case "PARENT":
       return { label: "Parent Portal", groups: [{ items: parentNav }] };
     case "STUDENT":
@@ -129,17 +149,20 @@ function getNavForRole(role: string, teaches: boolean): { label: string; groups:
 export function AppSidebar({
   role,
   teaches = false,
+  takesClasses = false,
   collapsed,
   onToggle,
 }: {
   role: string;
   /** The account has a teacher profile (only changes an administrator's menu) */
   teaches?: boolean;
+  /** The account has its own student record (adds Classes I take for staff) */
+  takesClasses?: boolean;
   collapsed: boolean;
   onToggle: () => void;
 }) {
   const pathname = usePathname();
-  const nav = getNavForRole(role, teaches);
+  const nav = getNavForRole(role, teaches, takesClasses);
 
   return (
     <aside

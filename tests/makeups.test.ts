@@ -23,14 +23,17 @@ const state = vi.hoisted(() => ({
   recorded: [] as { enrollmentId: string; sessionId: string; status: string; lockedAt: Date | null }[],
   /** When the teacher submitted each class (absent = not submitted) */
   submittedAt: {} as Record<string, Date>,
+  /** Classes the student teaches themself */
+  ownClasses: new Set<string>(),
 }));
 
 const db = vi.hoisted(() => {
   const activeIn = (sessionId: string) =>
     state.enrollments.filter((e) => e.sessionId === sessionId && e.status === "ACTIVE").length;
   const tx = {
-    $queryRaw: vi.fn(async (_sql: unknown, sessionId: string) =>
-      state.sessions[sessionId] ? [{ id: sessionId }] : []
+    // (sql, attendanceId, sessionId): the lock also says whether the student teaches the class
+    $queryRaw: vi.fn(async (_sql: unknown, _attendanceId: string, sessionId: string) =>
+      state.sessions[sessionId] ? [{ id: sessionId, ownClass: state.ownClasses.has(sessionId) }] : []
     ),
     attendance: {
       findUnique: vi.fn(async ({ where }: { where: { id: string } }) => {
@@ -117,6 +120,7 @@ beforeEach(() => {
   state.audit = [];
   state.recorded = [];
   state.submittedAt = {};
+  state.ownClasses = new Set();
   state.sessions = {
     ballet: { startTime: new Date(now - 48 * HOUR), maxCapacity: 10, active: true },
     jazz: { startTime: new Date(now + 48 * HOUR), maxCapacity: 2, active: true },
@@ -197,6 +201,12 @@ describe("bookMakeup", () => {
     await expect(book("nope")).rejects.toThrow(/no longer available/);
     state.sessions.tap.active = false;
     await expect(book("tap")).rejects.toThrow(/no longer available/);
+  });
+
+  it("refuses a class the student teaches", async () => {
+    state.ownClasses.add("jazz");
+    await expect(book("jazz")).rejects.toThrow(/a class they teach/);
+    expect(state.enrollments.some((e) => e.makeupForId !== null)).toBe(false);
   });
 
   it("refuses a class the student is already in", async () => {

@@ -242,8 +242,18 @@ export async function bookMakeup({
   allowPast?: boolean;
 }) {
   return prisma.$transaction(async (tx) => {
-    const locked = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "ClassSession" WHERE id = ${sessionId} FOR UPDATE`;
+    const locked = await tx.$queryRaw<{ id: string; ownClass: boolean }[]>`
+      SELECT cs.id,
+        EXISTS (
+          SELECT 1 FROM "Teacher" t
+          JOIN "Student" s ON s."userId" = t."userId"
+          JOIN "Attendance" a ON a.id = ${attendanceId}
+          JOIN "Enrollment" e ON e.id = a."enrollmentId" AND e."studentId" = s.id
+          WHERE t.id = cs."teacherId"
+        ) AS "ownClass"
+      FROM "ClassSession" cs WHERE cs.id = ${sessionId} FOR UPDATE OF cs`;
     if (locked.length === 0) throw new MakeupError("That class is no longer available");
+    if (locked[0].ownClass) throw new MakeupError("That is a class they teach, so it cannot be a makeup");
 
     const [missed, target] = await Promise.all([
       tx.attendance.findUnique({

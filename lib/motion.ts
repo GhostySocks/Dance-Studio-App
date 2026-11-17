@@ -64,3 +64,28 @@ export const carouselTileReduced: Variants = {
   shown: { opacity: 1, visibility: "visible", transition: { duration: 0.2 } },
   away: { opacity: 0, transition: { duration: 0.2 }, transitionEnd: { visibility: "hidden" } },
 };
+
+/** The home page hero artwork: its shapes arrive one after another. */
+export const heroShapes: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.12, delayChildren: 0.15 } },
+};
+
+/** One shape of the hero artwork settling into place. */
+export const heroShape: Variants = {
+  hidden: { opacity: 0, scale: 0.8, y: 28 },
+  visible: { opacity: 1, scale: 1, y: 0, transition: { type: "spring", stiffness: 90, damping: 14 } },
+};
+
+/**
+ * The slow drift of a hero shape once it has arrived. `order` gives each layer
+ * its own pace and direction so they never move in step.
+ */
+export function heroDrift(order: number) {
+  const up = order % 2 === 0 ? -1 : 1;
+  return {
+    y: [0, up * 9, 0],
+    x: [0, -up * 5, 0],
+    transition: { duration: 7 + order * 1.3, repeat: Infinity, ease: "easeInOut" as const, delay: 1.2 },
+  };
+}

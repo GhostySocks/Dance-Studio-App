@@ -26,6 +26,18 @@ export function hasRole(
   return roles.includes(session.user.role);
 }
 
+/**
+ * Someone who uses the family portal for themself or their children: a parent,
+ * an adult student, or a member of staff who also takes classes (they have their
+ * own student record). What they can reach is still looked up by their user id.
+ */
+export function isPortalUser(
+  session: { user: { role: UserRole; takesClasses?: boolean } } | null
+): boolean {
+  if (!session) return false;
+  return hasRole(session, "PARENT", "STUDENT") || session.user.takesClasses === true;
+}
+
 export function isAdmin(session: { user: { role: UserRole } } | null): boolean {
   return hasRole(session, "SUPER_ADMIN", "ADMIN");
 }
