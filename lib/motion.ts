@@ -65,6 +65,12 @@ export const carouselTileReduced: Variants = {
   away: { opacity: 0, transition: { duration: 0.2 }, transitionEnd: { visibility: "hidden" } },
 };
 
+/** A menu section folding shut and opening again. */
+export const collapseSection: Variants = {
+  open: { height: "auto", opacity: 1, transition: { duration: 0.2, ease: "easeOut" } },
+  closed: { height: 0, opacity: 0, transition: { duration: 0.16, ease: "easeIn" } },
+};
+
 /** The home page hero artwork: its shapes arrive one after another. */
 export const heroShapes: Variants = {
   hidden: {},

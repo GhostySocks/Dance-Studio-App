@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   LayoutDashboard,
   Users,
@@ -22,8 +23,10 @@ import {
   Settings,
   CalendarRange,
   ClipboardList,
+  ChevronDown,
 } from "lucide-react";
 import { StudioLogo } from "@/components/studio-logo";
+import { collapseSection } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -146,6 +149,49 @@ function getNavForRole(
   }
 }
 
+/** Where the folded menu sections are remembered, per browser. */
+const FOLDED_KEY = "sidebar-folded-sections";
+
+const isActivePath = (pathname: string, href: string) => pathname === href || pathname.startsWith(href + "/");
+
+/**
+ * Which menu sections are folded shut. Remembered in this browser, and the
+ * section holding the current page is always opened so the page you are on is
+ * never hidden.
+ */
+function useFoldedSections(groups: NavGroup[], pathname: string) {
+  const [folded, setFolded] = useState<string[]>([]);
+
+  // Read after mounting, so the server and the first client render agree
+  useEffect(() => {
+    try {
+      const saved: unknown = JSON.parse(window.localStorage.getItem(FOLDED_KEY) ?? "[]");
+      if (Array.isArray(saved)) setFolded(saved.filter((label): label is string => typeof label === "string"));
+    } catch {
+      // No storage (private window): sections simply start open
+    }
+  }, []);
+
+  const activeLabel = groups.find((group) => group.items.some((item) => isActivePath(pathname, item.href)))?.label;
+  useEffect(() => {
+    if (activeLabel) setFolded((current) => (current.includes(activeLabel) ? current.filter((l) => l !== activeLabel) : current));
+  }, [activeLabel]);
+
+  function toggle(label: string) {
+    setFolded((current) => {
+      const next = current.includes(label) ? current.filter((l) => l !== label) : [...current, label];
+      try {
+        window.localStorage.setItem(FOLDED_KEY, JSON.stringify(next));
+      } catch {
+        // Not remembered, but it still folds for this visit
+      }
+      return next;
+    });
+  }
+
+  return { folded, toggle };
+}
+
 export function AppSidebar({
   role,
   teaches = false,
@@ -163,6 +209,9 @@ export function AppSidebar({
 }) {
   const pathname = usePathname();
   const nav = getNavForRole(role, teaches, takesClasses);
+  const { folded, toggle } = useFoldedSections(nav.groups, pathname);
+  const reduceMotion = useReducedMotion();
+  const sectionId = useId();
 
   return (
     <aside
@@ -190,22 +239,45 @@ export function AppSidebar({
           </p>
         )}
         <nav aria-label={nav.label} className="px-2">
-          {nav.groups.map((group, index) => (
+          {nav.groups.map((group, index) => {
+            // With the whole menu narrowed to icons there are no headings, so nothing is folded
+            const open = collapsed || !group.label || !folded.includes(group.label);
+            const itemsId = `${sectionId}-${index}`;
+            return (
             <div
               key={group.label ?? index}
               role={group.label ? "group" : undefined}
               aria-label={group.label}
-              className={cn("space-y-0.5", index > 0 && (collapsed ? "mt-2 border-t pt-2" : "mt-4"))}
+              className={cn(index > 0 && (collapsed ? "mt-2 border-t pt-2" : "mt-4"))}
             >
               {group.label && !collapsed && (
-                <p className="px-3 pb-1 text-[11px] font-bold uppercase tracking-widest text-foreground">
+                <button
+                  type="button"
+                  onClick={() => toggle(group.label!)}
+                  aria-expanded={open}
+                  aria-controls={itemsId}
+                  className="flex w-full items-center justify-between rounded-md px-3 pb-1 pt-0.5 text-[11px] font-bold uppercase tracking-widest text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
                   {group.label}
-                </p>
+                  <ChevronDown
+                    aria-hidden
+                    className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform duration-200", !open && "-rotate-90")}
+                  />
+                </button>
               )}
+              <AnimatePresence initial={false}>
+                {open && (
+              <motion.div
+                id={itemsId}
+                key="items"
+                variants={reduceMotion ? undefined : collapseSection}
+                initial="closed"
+                animate="open"
+                exit="closed"
+                className="space-y-0.5 overflow-hidden"
+              >
               {group.items.map((item) => {
-                const isActive =
-                  pathname === item.href ||
-                  pathname.startsWith(item.href + "/");
+                const isActive = isActivePath(pathname, item.href);
                 return (
                   <Link
                     key={item.href}
@@ -226,8 +298,12 @@ export function AppSidebar({
                   </Link>
                 );
               })}
+              </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-          ))}
+            );
+          })}
         </nav>
       </div>
 
